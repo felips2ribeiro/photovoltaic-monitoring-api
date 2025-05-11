@@ -1,16 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { DataSourceOptions } from 'typeorm';
-
-type SupportedDatabaseType = DataSourceOptions['type'];
+import { SqliteConnectionOptions } from 'typeorm/driver/sqlite/SqliteConnectionOptions';
 
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService): DataSourceOptions => {
+      useFactory: (configService: ConfigService): SqliteConnectionOptions => {
         const databaseName = configService.get<string>('DATABASE_NAME');
         const databaseTypeFromEnv = configService.get<string>('DATABASE_TYPE');
 
@@ -26,13 +24,12 @@ type SupportedDatabaseType = DataSourceOptions['type'];
           );
         }
 
-        const type = databaseTypeFromEnv as SupportedDatabaseType;
         const synchronize =
           configService.get<string>('NODE_ENV') !== 'production';
         const logging = configService.get<string>('NODE_ENV') !== 'production';
 
         return {
-          type: type,
+          type: 'sqlite',
           database: databaseName,
           entities: [__dirname + '/../**/*.entity{.ts,.js}'],
           synchronize: synchronize,
