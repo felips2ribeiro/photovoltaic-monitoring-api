@@ -46,16 +46,12 @@ export class PlantsService {
   }
 
   async update(id: number, updatePlantDto: UpdatePlantDto): Promise<Plant> {
-    const plantToUpdate = await this.plantRepository.preload({
-      id: id,
-      ...updatePlantDto,
-    });
-
-    if (!plantToUpdate) {
+    const plantLoaded = await this.plantRepository.findOneBy({ id });
+    if (!plantLoaded) {
       throw new NotFoundException(`Plant with ID "${id}" not found.`);
     }
 
-    if (updatePlantDto.name && updatePlantDto.name !== plantToUpdate.name) {
+    if (updatePlantDto.name && updatePlantDto.name !== plantLoaded.name) {
       const existingPlantWithNewName = await this.plantRepository
         .createQueryBuilder('plant')
         .where('plant.name = :name AND plant.id != :id', {
@@ -68,6 +64,17 @@ export class PlantsService {
           `Another plant with name "${updatePlantDto.name}" already exists.`,
         );
       }
+    }
+
+    const plantToUpdate = await this.plantRepository.preload({
+      id: id,
+      ...updatePlantDto,
+    });
+
+    if (!plantToUpdate) {
+      throw new NotFoundException(
+        `Plant with ID "${id}" not found during preload.`,
+      );
     }
 
     return this.plantRepository.save(plantToUpdate);
