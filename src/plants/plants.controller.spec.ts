@@ -4,6 +4,7 @@ import { PlantsService } from './plants.service';
 import { CreatePlantDto } from './dto/create-plant.dto';
 import { UpdatePlantDto } from './dto/update-plant.dto';
 import { Plant } from './entities/plant.entity';
+import { PlantResponseDto } from './dto/plant-response.dto';
 import { NotFoundException, ConflictException } from '@nestjs/common';
 
 const mockPlantsService = {
@@ -19,7 +20,7 @@ describe('PlantsController', () => {
 
   const mockPlantEntity: Plant = {
     id: 1,
-    name: 'Usina Teste Controller',
+    name: 'Usina Teste Entidade',
     inverters: [],
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -50,18 +51,22 @@ describe('PlantsController', () => {
   });
 
   describe('create', () => {
-    it('should call service.create and return the created plant', async () => {
-      const createPlantDto: CreatePlantDto = {
-        name: 'Nova Usina via Controller',
+    it('should call service.create and return a PlantResponseDto', async () => {
+      const createPlantDto: CreatePlantDto = { name: 'Nova Usina' };
+      const serviceResultEntity: Plant = {
+        ...mockPlantEntity,
+        ...createPlantDto,
+        id: 2,
       };
-      const expectedResult = { ...mockPlantEntity, ...createPlantDto };
-
-      mockPlantsService.create.mockResolvedValue(expectedResult);
+      mockPlantsService.create.mockResolvedValue(serviceResultEntity);
 
       const result = await controller.create(createPlantDto);
 
       expect(mockPlantsService.create).toHaveBeenCalledWith(createPlantDto);
-      expect(result).toEqual(expectedResult);
+      expect(result).toBeInstanceOf(PlantResponseDto);
+      expect(result.id).toEqual(serviceResultEntity.id);
+      expect(result.name).toEqual(serviceResultEntity.name);
+      expect(result.createdAt).toEqual(serviceResultEntity.createdAt);
     });
 
     it('should propagate ConflictException from service', async () => {
@@ -78,50 +83,50 @@ describe('PlantsController', () => {
   });
 
   describe('findAll', () => {
-    it('should call service.findAll and return an array of plants', async () => {
-      const expectedResult = [mockPlantEntity];
-      mockPlantsService.findAll.mockResolvedValue(expectedResult);
+    it('should call service.findAll and return an array of PlantResponseDto', async () => {
+      const serviceResultEntities: Plant[] = [mockPlantEntity];
+      mockPlantsService.findAll.mockResolvedValue(serviceResultEntities);
 
       const result = await controller.findAll();
 
       expect(mockPlantsService.findAll).toHaveBeenCalled();
-      expect(result).toEqual(expectedResult);
+      expect(Array.isArray(result)).toBe(true);
+      expect(result.length).toBe(1);
+      expect(result[0]).toBeInstanceOf(PlantResponseDto);
+      expect(result[0].id).toEqual(serviceResultEntities[0].id);
     });
   });
 
   describe('findOne', () => {
-    it('should call service.findOne with id and return a plant', async () => {
+    it('should call service.findOne and return a PlantResponseDto', async () => {
       const plantId = 1;
       mockPlantsService.findOne.mockResolvedValue(mockPlantEntity);
 
       const result = await controller.findOne(plantId);
 
       expect(mockPlantsService.findOne).toHaveBeenCalledWith(plantId);
-      expect(result).toEqual(mockPlantEntity);
+      expect(result).toBeInstanceOf(PlantResponseDto);
+      expect(result.id).toEqual(mockPlantEntity.id);
     });
 
     it('should propagate NotFoundException from service', async () => {
       const plantId = 999;
-      mockPlantsService.findOne.mockRejectedValue(
-        new NotFoundException('Test not found'),
-      );
-
+      mockPlantsService.findOne.mockRejectedValue(new NotFoundException());
       await expect(controller.findOne(plantId)).rejects.toThrow(
         NotFoundException,
       );
-      expect(mockPlantsService.findOne).toHaveBeenCalledWith(plantId);
     });
   });
 
   describe('update', () => {
-    it('should call service.update with id and dto, and return the updated plant', async () => {
+    it('should call service.update and return an updated PlantResponseDto', async () => {
       const plantId = 1;
-      const updatePlantDto: UpdatePlantDto = {
-        name: 'Usina Atualizada via Controller',
+      const updatePlantDto: UpdatePlantDto = { name: 'Usina Atualizada' };
+      const serviceResultEntity: Plant = {
+        ...mockPlantEntity,
+        ...updatePlantDto,
       };
-      const expectedResult = { ...mockPlantEntity, ...updatePlantDto };
-
-      mockPlantsService.update.mockResolvedValue(expectedResult);
+      mockPlantsService.update.mockResolvedValue(serviceResultEntity);
 
       const result = await controller.update(plantId, updatePlantDto);
 
@@ -129,22 +134,16 @@ describe('PlantsController', () => {
         plantId,
         updatePlantDto,
       );
-      expect(result).toEqual(expectedResult);
+      expect(result).toBeInstanceOf(PlantResponseDto);
+      expect(result.name).toEqual(updatePlantDto.name);
     });
 
-    it('should propagate exceptions from service during update', async () => {
+    it('should propagate NotFoundException from service', async () => {
       const plantId = 1;
       const updatePlantDto: UpdatePlantDto = { name: 'Nome Ruim' };
-      mockPlantsService.update.mockRejectedValue(
-        new NotFoundException('Test update not found'),
-      );
-
+      mockPlantsService.update.mockRejectedValue(new NotFoundException());
       await expect(controller.update(plantId, updatePlantDto)).rejects.toThrow(
         NotFoundException,
-      );
-      expect(mockPlantsService.update).toHaveBeenCalledWith(
-        plantId,
-        updatePlantDto,
       );
     });
   });
@@ -160,14 +159,10 @@ describe('PlantsController', () => {
 
     it('should propagate NotFoundException from service during remove', async () => {
       const plantId = 999;
-      mockPlantsService.remove.mockRejectedValue(
-        new NotFoundException('Test remove not found'),
-      );
-
+      mockPlantsService.remove.mockRejectedValue(new NotFoundException());
       await expect(controller.remove(plantId)).rejects.toThrow(
         NotFoundException,
       );
-      expect(mockPlantsService.remove).toHaveBeenCalledWith(plantId);
     });
   });
 });

@@ -4,7 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { CreatePlantDto } from '../src/plants/dto/create-plant.dto';
 import { UpdatePlantDto } from '../src/plants/dto/update-plant.dto';
-import { Plant } from '../src/plants/entities/plant.entity';
+import { PlantResponseDto } from '../src/plants/dto/plant-response.dto';
 import { Server } from 'http';
 
 describe('PlantsController (e2e)', () => {
@@ -12,7 +12,8 @@ describe('PlantsController (e2e)', () => {
   let httpServer: Server;
 
   let createdPlantId: number;
-  const createdPlantName = 'Usina E2E Inicial';
+  const createdPlantName = 'Usina E2E Inicial DTO';
+  let initialPlantForE2E: PlantResponseDto;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -30,30 +31,35 @@ describe('PlantsController (e2e)', () => {
         },
       }),
     );
-
     await app.init();
     httpServer = app.getHttpServer() as Server;
   });
 
   afterAll(async () => {
+    if (createdPlantId) {
+      await request(httpServer).delete(`/plants/${createdPlantId}`);
+    }
     await app.close();
   });
 
   describe('/plants (POST)', () => {
-    it('should create a new plant and return 201', async () => {
+    it('should create a new plant and return 201 with PlantResponseDto structure', async () => {
       const createPlantDto: CreatePlantDto = { name: createdPlantName };
       const response = await request(httpServer)
         .post('/plants')
         .send(createPlantDto)
         .expect(201);
 
-      const body = response.body as Plant;
+      const body = response.body as PlantResponseDto;
 
       expect(body).toBeInstanceOf(Object);
       expect(body.id).toBeDefined();
       expect(typeof body.id).toBe('number');
       expect(body.name).toEqual(createPlantDto.name);
+      expect(body.createdAt).toBeDefined();
+
       createdPlantId = body.id;
+      initialPlantForE2E = body;
     });
 
     it('should return 400 if name is missing', () => {
@@ -70,29 +76,38 @@ describe('PlantsController (e2e)', () => {
   });
 
   describe('/plants (GET)', () => {
-    it('should get all plants and return 200', async () => {
+    it('should get all plants and return 200 with PlantResponseDto structure', async () => {
+      expect(createdPlantId).toBeDefined();
       const response = await request(httpServer).get('/plants').expect(200);
 
-      const body = response.body as Plant[];
+      const body = response.body as PlantResponseDto[];
 
       expect(Array.isArray(body)).toBe(true);
       expect(body.length).toBeGreaterThanOrEqual(1);
-      const plantExists = body.some((p: Plant) => p.id === createdPlantId);
-      expect(plantExists).toBe(true);
+      const plantInResponse = body.find((p) => p.id === createdPlantId);
+      expect(plantInResponse).toBeDefined();
+      if (plantInResponse) {
+        expect(plantInResponse.name).toEqual(initialPlantForE2E.name);
+        expect(new Date(plantInResponse.createdAt).toISOString()).toEqual(
+          new Date(initialPlantForE2E.createdAt).toISOString(),
+        );
+      }
     });
   });
 
   describe('/plants/:id (GET)', () => {
-    it('should get a specific plant by id and return 200', async () => {
+    it('should get a specific plant by id and return 200 with PlantResponseDto structure', async () => {
       expect(createdPlantId).toBeDefined();
       const response = await request(httpServer)
         .get(`/plants/${createdPlantId}`)
         .expect(200);
-
-      const body = response.body as Plant;
+      const body = response.body as PlantResponseDto;
 
       expect(body.id).toEqual(createdPlantId);
-      expect(body.name).toEqual(createdPlantName);
+      expect(body.name).toEqual(initialPlantForE2E.name);
+      expect(new Date(body.createdAt).toISOString()).toEqual(
+        new Date(initialPlantForE2E.createdAt).toISOString(),
+      );
     });
 
     it('should return 404 if plant not found', () => {
@@ -105,24 +120,26 @@ describe('PlantsController (e2e)', () => {
   });
 
   describe('/plants/:id (PATCH)', () => {
-    const updatedName = 'Usina E2E Atualizada';
-    it('should update a plant and return 200', async () => {
+    const updatedName = 'Usina E2E Atualizada DTO';
+    it('should update a plant and return 200 with PlantResponseDto structure', async () => {
       expect(createdPlantId).toBeDefined();
       const updatePlantDto: UpdatePlantDto = { name: updatedName };
       const response = await request(httpServer)
         .patch(`/plants/${createdPlantId}`)
         .send(updatePlantDto)
         .expect(200);
-
-      const body = response.body as Plant;
+      const body = response.body as PlantResponseDto;
 
       expect(body.id).toEqual(createdPlantId);
       expect(body.name).toEqual(updatedName);
+      expect(new Date(body.createdAt).toISOString()).toEqual(
+        new Date(initialPlantForE2E.createdAt).toISOString(),
+      );
 
       const getResponse = await request(httpServer)
         .get(`/plants/${createdPlantId}`)
         .expect(200);
-      const verifiedPlant = getResponse.body as Plant;
+      const verifiedPlant = getResponse.body as PlantResponseDto;
       expect(verifiedPlant.name).toEqual(updatedName);
     });
 
@@ -148,11 +165,14 @@ describe('PlantsController (e2e)', () => {
     it('should delete a plant and return 204', async () => {
       expect(createdPlantId).toBeDefined();
       await request(httpServer).delete(`/plants/${createdPlantId}`).expect(204);
+      createdPlantId = 0;
     });
 
-    it('should return 404 when trying to get a deleted plant', () => {
-      expect(createdPlantId).toBeDefined();
-      return request(httpServer).get(`/plants/${createdPlantId}`).expect(404);
+    it('should return 404 when trying to get a deleted plant', async () => {
+      expect(initialPlantForE2E.id).toBeDefined();
+      return request(httpServer)
+        .get(`/plants/${initialPlantForE2E.id}`)
+        .expect(404);
     });
 
     it('should return 404 if plant to delete not found', () => {

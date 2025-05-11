@@ -9,21 +9,18 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  ClassSerializerInterceptor,
 } from '@nestjs/common';
 import { PlantsService } from './plants.service';
 import { CreatePlantDto } from './dto/create-plant.dto';
 import { UpdatePlantDto } from './dto/update-plant.dto';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-  ApiBody,
-} from '@nestjs/swagger';
-import { Plant } from './entities/plant.entity';
+import { PlantResponseDto } from './dto/plant-response.dto';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 
 @ApiTags('plants')
 @Controller('plants')
+@UseInterceptors(ClassSerializerInterceptor)
 export class PlantsController {
   constructor(private readonly plantsService: PlantsService) {}
 
@@ -31,82 +28,105 @@ export class PlantsController {
   @ApiOperation({ summary: 'Create a new power plant' })
   @ApiResponse({
     status: 201,
-    description: 'The plant has been successfully created.',
-    type: Plant,
+    description: 'The power plant was successfully created.',
+    type: PlantResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiResponse({ status: 400, description: 'Invalid input data.' })
   @ApiResponse({
     status: 409,
-    description: 'Conflict. Plant name already exists.',
+    description: 'A power plant with this name already exists.',
   })
-  create(@Body() createPlantDto: CreatePlantDto) {
-    return this.plantsService.create(createPlantDto);
+  async create(
+    @Body() createPlantDto: CreatePlantDto,
+  ): Promise<PlantResponseDto> {
+    const plant = await this.plantsService.create(createPlantDto);
+    return new PlantResponseDto(plant);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all power plants' })
   @ApiResponse({
     status: 200,
-    description: 'List of all plants.',
-    type: [Plant],
+    description: 'List of all registered power plants.',
+    type: [PlantResponseDto],
   })
-  findAll() {
-    return this.plantsService.findAll();
+  async findAll(): Promise<PlantResponseDto[]> {
+    const plants = await this.plantsService.findAll();
+    return plants.map((plant) => new PlantResponseDto(plant));
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a power plant by ID' })
+  @ApiOperation({ summary: 'Get a specific power plant by ID' })
   @ApiParam({
     name: 'id',
-    description: 'ID of the plant to retrieve',
+    required: true,
+    description: 'Numeric ID of the power plant to retrieve',
     type: Number,
   })
-  @ApiResponse({ status: 200, description: 'The plant data.', type: Plant })
-  @ApiResponse({ status: 404, description: 'Plant not found.' })
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.plantsService.findOne(id);
+  @ApiResponse({
+    status: 200,
+    description: 'Detailed information about the power plant.',
+    type: PlantResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Power plant not found for the provided ID.',
+  })
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<PlantResponseDto> {
+    const plant = await this.plantsService.findOne(id);
+    return new PlantResponseDto(plant);
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a power plant by ID' })
+  @ApiOperation({ summary: 'Update an existing power plant' })
   @ApiParam({
     name: 'id',
-    description: 'ID of the plant to update',
+    required: true,
+    description: 'Numeric ID of the power plant to update',
     type: Number,
   })
-  @ApiBody({ type: UpdatePlantDto })
   @ApiResponse({
     status: 200,
-    description: 'The plant has been successfully updated.',
-    type: Plant,
+    description: 'The power plant was successfully updated.',
+    type: PlantResponseDto,
   })
-  @ApiResponse({ status: 404, description: 'Plant not found.' })
-  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiResponse({ status: 400, description: 'Invalid input data for update.' })
+  @ApiResponse({
+    status: 404,
+    description: 'Power plant not found for update.',
+  })
   @ApiResponse({
     status: 409,
-    description: 'Conflict. New plant name already exists.',
+    description: 'Name conflict when trying to update the power plant.',
   })
-  update(
+  async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updatePlantDto: UpdatePlantDto,
-  ) {
-    return this.plantsService.update(id, updatePlantDto);
+  ): Promise<PlantResponseDto> {
+    const plant = await this.plantsService.update(id, updatePlantDto);
+    return new PlantResponseDto(plant);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete a power plant by ID' })
+  @ApiOperation({ summary: 'Remove a power plant by ID' })
   @ApiParam({
     name: 'id',
-    description: 'ID of the plant to delete',
+    required: true,
+    description: 'Numeric ID of the power plant to remove',
     type: Number,
   })
   @ApiResponse({
     status: 204,
-    description: 'The plant has been successfully deleted.',
+    description: 'The power plant was successfully removed.',
   })
-  @ApiResponse({ status: 404, description: 'Plant not found.' })
-  async remove(@Param('id', ParseIntPipe) id: number) {
+  @ApiResponse({
+    status: 404,
+    description: 'Power plant not found for removal.',
+  })
+  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     await this.plantsService.remove(id);
   }
 }
