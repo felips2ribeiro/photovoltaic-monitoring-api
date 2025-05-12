@@ -26,7 +26,7 @@ import { SqliteConnectionOptions } from 'typeorm/driver/sqlite/SqliteConnectionO
 
         const synchronize =
           configService.get<string>('NODE_ENV') !== 'production';
-        const logging = configService.get<string>('NODE_ENV') !== 'production';
+        const logging = process.env.NODE_ENV !== 'test-e2e';
 
         return {
           type: 'sqlite',

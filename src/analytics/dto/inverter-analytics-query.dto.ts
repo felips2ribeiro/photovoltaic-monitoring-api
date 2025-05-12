@@ -1,28 +1,25 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDate, IsNotEmpty } from 'class-validator';
-import { Transform } from 'class-transformer';
-import { DateRangeQueryDto } from './date-range-query.dto';
+import { IsNotEmpty, IsDate } from 'class-validator';
+import { Type } from 'class-transformer';
 
-export class InverterAnalyticsQueryDto extends DateRangeQueryDto {
+export class InverterAnalyticsQueryDto {
   @ApiProperty({
-    description: 'Start date (ISO 8601)',
+    description: 'Start date (ISO 8601 string will be transformed to Date)',
     example: '2023-01-01T00:00:00Z',
+    type: String,
   })
   @IsNotEmpty({ message: 'data_inicio is required.' })
-  @Transform(({ value }: { value: string }) =>
-    value ? new Date(value) : undefined,
-  )
-  @IsDate({ message: 'data_inicio must transform into a valid Date object' })
-  declare data_inicio: Date;
+  @Type(() => Date)
+  @IsDate({ message: 'data_inicio must be a valid Date object.' })
+  data_inicio: Date;
 
   @ApiProperty({
-    description: 'End date (ISO 8601)',
+    description: 'End date (ISO 8601 string will be transformed to Date)',
     example: '2023-01-31T23:59:59Z',
+    type: String,
   })
   @IsNotEmpty({ message: 'data_fim is required.' })
-  @Transform(({ value }: { value: string }) =>
-    value ? new Date(value) : undefined,
-  )
-  @IsDate({ message: 'data_fim must transform into a valid Date object' })
-  declare data_fim: Date;
+  @Type(() => Date)
+  @IsDate({ message: 'data_fim must be a valid Date object.' })
+  data_fim: Date;
 }

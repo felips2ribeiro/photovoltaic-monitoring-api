@@ -7,6 +7,7 @@ import {
   UseInterceptors,
   ClassSerializerInterceptor,
   ValidationPipe,
+  Logger,
 } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
@@ -17,6 +18,8 @@ import { DailyMaxPowerResponseDto } from './dto/daily-max-power-response.dto';
 @Controller('analytics')
 @UseInterceptors(ClassSerializerInterceptor)
 export class AnalyticsController {
+  private readonly logger = new Logger(AnalyticsController.name);
+
   constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('inverters/:inverterId/max-power-by-day')
@@ -27,7 +30,8 @@ export class AnalyticsController {
   @ApiParam({
     name: 'inverterId',
     type: Number,
-    description: 'Internal ID of the inverter',
+    required: true,
+    description: 'Internal ID of the inverter.',
   })
   @ApiResponse({
     status: 200,
@@ -37,7 +41,7 @@ export class AnalyticsController {
   @ApiResponse({
     status: 400,
     description:
-      'Invalid parameters (e.g., missing dates, date format, range).',
+      'Invalid parameters (e.g., missing required dates, invalid date format, or invalid date range).',
   })
   @ApiResponse({ status: 404, description: 'Inverter not found.' })
   async getMaxPowerByDay(
@@ -52,6 +56,9 @@ export class AnalyticsController {
     )
     query: InverterAnalyticsQueryDto,
   ): Promise<DailyMaxPowerResponseDto> {
+    this.logger.debug(
+      `Query DTO received by controller: data_inicio type: ${typeof query.data_inicio}, value: ${query.data_inicio?.toISOString()}; data_fim type: ${typeof query.data_fim}, value: ${query.data_fim?.toISOString()}`,
+    );
     const data = await this.analyticsService.getMaxPowerByDay(
       inverterId,
       query.data_inicio,
