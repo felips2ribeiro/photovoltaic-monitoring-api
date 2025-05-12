@@ -143,6 +143,12 @@ Principais grupos de endpoints:
         -   **Parâmetro de Rota:** `inverterId` (number).
         -   **Query Parameters Obrigatórios:** `data_inicio` (string ISO 8601), `data_fim` (string ISO 8601).
         -   **Resposta de Sucesso (200 OK):** Objeto `{ "totalGenerationWh": number, "startDate": "ISO_STRING", "endDate": "ISO_STRING", "entityId": number, "entityType": "inverter" }`.
+    - **Geração de Energia por Usina**
+        - **Endpoint:** `GET /analytics/plants/:plantId/generation`
+        - **Descrição:** Calcula a geração total de energia (em Watt-hora) para uma usina específica, somando a geração de todos os seus inversores, dentro de um intervalo de datas.
+        - **Parâmetro de Rota:** `plantId` (number).
+        - **Query Parameters Obrigatórios:** `data_inicio` (string ISO 8601), `data_fim` (string ISO 8601).
+        - **Resposta de Sucesso (200 OK):** Objeto `{ "totalGenerationWh": number, "startDate": "ISO_STRING", "endDate": "ISO_STRING", "entityId": number, "entityType": "plant" }`.
 
 ## Decisões de Design e Justificativas
 
@@ -155,3 +161,4 @@ Principais grupos de endpoints:
     -   **Estrutura de Data Aninhada (`datetime: { $date: "ISO_STRING" }`):** O `IngestMetricRecordDto` utiliza `@Transform` para converter esta estrutura em um objeto `Date` padrão.
 -   **Validação de Datas em Query Parameters:** A validação estrita `@IsISO8601()` foi flexibilizada nos DTOs de query de analytics para melhor compatibilidade com diferentes formas de envio de datas (ex: Swagger UI). A transformação para `Date` e a validação `@IsDate()` garantem que datas válidas sejam processadas.
 -   **Consultas de Analytics:** Utilizam o QueryBuilder do TypeORM. Funções específicas do banco (ex: `strftime` para SQLite) são usadas para manipulação de datas. A lógica comum de consulta para agregações diárias foi refatorada em métodos privados no `AnalyticsService` para evitar duplicação de código (DRY).
+-   **Cálculo de Geração da Usina:** A geração total de uma usina é calculada agregando (somando) a geração individual de cada um de seus inversores no período especificado. Isso reutiliza a lógica de cálculo de geração por inversor.
