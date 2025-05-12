@@ -36,7 +36,7 @@ O projeto segue a arquitetura modular padrão do NestJS, com clara separação p
 ### Pré-requisitos
 
 - Node.js (versão LTS recomendada, ex: v18.x ou v20.x)
-- npm (geralmente vem com o Node.js) ou yarn
+- npm (vem geralmente com o Node.js) ou yarn
 
 ### Instalação
 
@@ -88,7 +88,7 @@ O projeto segue a arquitetura modular padrão do NestJS, com clara separação p
 O sistema é configurado para facilitar a inicialização dos dados:
 
 1.  **Dados Base (Usinas e Inversores):**
-    *   Ao iniciar a aplicação pela primeira vez (ex: `npm run start:dev`), os dados base para **Usina 1**, **Usina 2** e os **Inversores com `externalId` de 1 a 8** (associados corretamente às suas usinas) são automaticamente criados no banco de dados, caso ainda não existam.
+    *   Ao iniciar a aplicação pela primeira vez (ex: `npm run start:dev`), os dados base para **Usina 1**, **usina 2** e os **Inversores com `externalId` de 1 a 8** (associados corretamente às suas usinas) são automaticamente criados no banco de dados, caso ainda não existam.
     *   Esta etapa é gerenciada pelo hook `onModuleInit` no `AppModule` e garante que a estrutura fundamental para as métricas esteja presente.
 
 2.  **Dados de Métricas (do arquivo `metrics.json`):**
@@ -127,34 +127,34 @@ Principais grupos de endpoints:
 -   **Analytics (`/analytics`):**
     -   **Potência Máxima por Dia para um Inversor**
         -   **Endpoint:** `GET /analytics/inverters/:inverterId/max-power-by-day`
-        -   **Descrição:** Retorna a potência ativa máxima registrada para cada dia, para um inversor específico, dentro de um intervalo de datas. Leituras de potência nulas são ignoradas no cálculo.
+        -   **Descrição:** Retorna a potência ativa máxima registrada para cada dia, para um inversor específico, num intervalo de datas. Leituras de potência nulas são ignoradas no cálculo.
         -   **Parâmetro de Rota:** `inverterId` (number).
         -   **Query Parameters Obrigatórios:** `data_inicio` (string ISO 8601), `data_fim` (string ISO 8601).
         -   **Resposta de Sucesso (200 OK):** Array de objetos `{ "day": "YYYY-MM-DD", "maxActivePower": number | null }`.
     -   **Média de Temperatura por Dia para um Inversor**
         -   **Endpoint:** `GET /analytics/inverters/:inverterId/average-temperature-by-day`
-        -   **Descrição:** Retorna a temperatura média registrada para cada dia, para um inversor específico, dentro de um intervalo de datas. Leituras de temperatura nulas são ignoradas no cálculo da média.
+        -   **Descrição:** Retorna a temperatura média registrada para cada dia, para um inversor específico, num intervalo de datas. Leituras de temperatura nulas são ignoradas no cálculo da média.
         -   **Parâmetro de Rota:** `inverterId` (number).
         -   **Query Parameters Obrigatórios:** `data_inicio` (string ISO 8601), `data_fim` (string ISO 8601).
         -   **Resposta de Sucesso (200 OK):** Array de objetos `{ "day": "YYYY-MM-DD", "averageTemperature": number | null }`.
     -   **Geração de Energia por Inversor**
         -   **Endpoint:** `GET /analytics/inverters/:inverterId/generation`
-        -   **Descrição:** Calcula a geração total de energia (em Watt-hora) para um inversor específico, dentro de um intervalo de datas. Utiliza a integral da potência ativa ao longo do tempo (regra do trapézio). Leituras com potência ativa nula são ignoradas
+        -   **Descrição:** Calcula a geração total de energia (em Watt-hora) para um inversor específico, num intervalo de datas. Utiliza a integral da potência ativa ao longo do tempo (regra do trapézio). Leituras com potência ativa nula são ignoradas
         -   **Parâmetro de Rota:** `inverterId` (number).
         -   **Query Parameters Obrigatórios:** `data_inicio` (string ISO 8601), `data_fim` (string ISO 8601).
-        -   **Resposta de Sucesso (200 OK):** Objeto `{ "totalGenerationWh": number, "startDate": "ISO_STRING", "endDate": "ISO_STRING", "entityId": number, "entityType": "inverter" }`.
+        -   **Resposta de Sucesso (200 OK):** Objeto `{ "totalGenerationWh": number, "startDate": "YYYY-MM-DDTHH:mm:ss.sssZ", "endDate": "YYYY-MM-DDTHH:mm:ss.sssZ", "entityId": number, "entityType": "inverter" }`.
     - **Geração de Energia por Usina**
         - **Endpoint:** `GET /analytics/plants/:plantId/generation`
-        - **Descrição:** Calcula a geração total de energia (em Watt-hora) para uma usina específica, somando a geração de todos os seus inversores, dentro de um intervalo de datas.
+        - **Descrição:** Calcula a geração total de energia (em Watt-hora) para uma usina específica, somando a geração de todos os seus inversores, num intervalo de datas.
         - **Parâmetro de Rota:** `plantId` (number).
         - **Query Parameters Obrigatórios:** `data_inicio` (string ISO 8601), `data_fim` (string ISO 8601).
-        - **Resposta de Sucesso (200 OK):** Objeto `{ "totalGenerationWh": number, "startDate": "ISO_STRING", "endDate": "ISO_STRING", "entityId": number, "entityType": "plant" }`.
+        - **Resposta de Sucesso (200 OK):** Objeto `{ "totalGenerationWh": number, "startDate": "YYYY-MM-DDTHH:mm:ss.sssZ", "endDate": "YYYY-MM-DDTHH:mm:ss.sssZ", "entityId": number, "entityType": "plant" }`.
 
 ## Decisões de Design e Justificativas
 
 - **DTOs de Entrada e Resposta:** DTOs (Data Transfer Objects) são utilizados extensivamente para validar dados de entrada (`class-validator`), transformar dados (`class-transformer`), e definir contratos claros para as respostas da API (`XxxResponseDto`). O `ClassSerializerInterceptor` do NestJS é usado para controlar a exposição de campos nas respostas, permitindo a omissão seletiva de dados internos (como `updatedAt` em alguns DTOs de resposta) e desacoplando a representação da API das entidades do banco de dados.
 - **Seeding e Ingestão de Dados:**
-    - **Dados Base (Usinas e Inversores):** São automaticamente "semeados" no banco de dados na inicialização da aplicação (`onModuleInit` no `AppModule`). Isso garante que o ambiente de desenvolvimento e teste esteja pronto rapidamente com a estrutura fundamental (Usina 1, Usina 2, Inversores 1-8), verificando a existência antes de criar para evitar duplicatas.
+    - **Dados Base (Usinas e Inversores):** São automaticamente "semeados" no banco de dados na inicialização da aplicação (`onModuleInit` no `AppModule`). Isso garante que o ambiente de desenvolvimento e teste esteja pronto rapidamente com a estrutura fundamental (Usina 1, usina 2, inversores 1-8), verificando a existência antes de criar para evitar duplicatas.
     - **Ingestão de Métricas (`metrics.json`):** Controlada por um endpoint dedicado (`POST /metrics/ingest-file`). Esta abordagem foi escolhida para dar controle explícito sobre essa operação (potencialmente longa), evitar re-ingestões automáticas a cada reinício da aplicação em desenvolvimento, e permitir um feedback claro sobre o resultado da ingestão. A ingestão é feita em lote (`bulk save`) no `MetricsService` para melhor performance.
 - **Tratamento de Dados de Métricas:**
     - **Valores Nulos:** Campos como `potencia_ativa_watt` e `temperatura_celsius` no `metrics.json` podem ser `null`. O sistema está configurado para aceitar e persistir esses `null`s, representando ausência de leitura válida. Os cálculos de analytics (MAX, AVG, Geração) são configurados para ignorar esses valores nulos.
