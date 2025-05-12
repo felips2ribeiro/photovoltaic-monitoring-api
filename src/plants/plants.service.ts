@@ -31,13 +31,13 @@ export class PlantsService {
   }
 
   async findAll(): Promise<Plant[]> {
-    return this.plantRepository.find({ relations: ['inverters'] });
+    return this.plantRepository.find({ relations: { inverters: true } });
   }
 
   async findOne(id: number): Promise<Plant> {
     const plant = await this.plantRepository.findOne({
       where: { id },
-      relations: ['inverters'],
+      relations: { inverters: true },
     });
     if (!plant) {
       throw new NotFoundException(`Plant with ID "${id}" not found.`);

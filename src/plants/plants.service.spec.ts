@@ -6,7 +6,6 @@ import { Repository, SelectQueryBuilder, ObjectLiteral } from 'typeorm';
 import { CreatePlantDto } from './dto/create-plant.dto';
 import { UpdatePlantDto } from './dto/update-plant.dto';
 import { NotFoundException, ConflictException } from '@nestjs/common';
-
 type MockedQueryBuilder<T extends ObjectLiteral> = Pick<
   SelectQueryBuilder<T>,
   'where' | 'andWhere' | 'getOne' | 'getMany'
@@ -130,7 +129,7 @@ describe('PlantsService', () => {
       const result = await service.findAll();
       expect(result).toEqual(plantsArray);
       expect(plantRepository.find).toHaveBeenCalledWith({
-        relations: ['inverters'],
+        relations: { inverters: true },
       });
     });
   });
@@ -143,7 +142,7 @@ describe('PlantsService', () => {
       expect(result).toEqual(mockPlant);
       expect(plantRepository.findOne).toHaveBeenCalledWith({
         where: { id: mockPlant.id },
-        relations: ['inverters'],
+        relations: { inverters: true },
       });
     });
 
@@ -156,7 +155,7 @@ describe('PlantsService', () => {
       );
       expect(plantRepository.findOne).toHaveBeenCalledWith({
         where: { id: nonExistentId },
-        relations: ['inverters'],
+        relations: { inverters: true },
       });
     });
   });
@@ -272,7 +271,7 @@ describe('PlantsService', () => {
 
       expect(plantRepository.findOne).toHaveBeenCalledWith({
         where: { id: mockPlant.id },
-        relations: ['inverters'],
+        relations: { inverters: true },
       });
       expect(plantRepository.remove).toHaveBeenCalledWith(mockPlant);
     });
@@ -283,7 +282,7 @@ describe('PlantsService', () => {
       await expect(service.remove(999)).rejects.toThrow(NotFoundException);
       expect(plantRepository.findOne).toHaveBeenCalledWith({
         where: { id: 999 },
-        relations: ['inverters'],
+        relations: { inverters: true },
       });
     });
   });
