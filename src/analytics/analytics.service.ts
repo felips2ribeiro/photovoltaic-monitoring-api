@@ -180,10 +180,6 @@ export class AnalyticsService {
       select: ['timestamp', 'activePower'],
     });
 
-    this.logger.debug(
-      `Found ${metrics.length} metrics for inverter ${inverterId} in range for generation calculation.`,
-    );
-
     if (metrics.length < 2) {
       this.logger.log(
         `Not enough metrics (found ${metrics.length}) to calculate generation for inverter ${inverterId}. Returning 0.`,
@@ -249,10 +245,6 @@ export class AnalyticsService {
         entityType: 'plant',
       });
     }
-
-    this.logger.debug(
-      `Calculating generation for plant ${plantId} with ${plant.inverters.length} inverters.`,
-    );
 
     const inverterGenerationPromises = plant.inverters.map(
       (inverter: Inverter) =>

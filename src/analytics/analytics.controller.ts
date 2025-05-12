@@ -7,7 +7,6 @@ import {
   UseInterceptors,
   ClassSerializerInterceptor,
   ValidationPipe,
-  Logger,
 } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
@@ -21,8 +20,6 @@ import { PlantAnalyticsQueryDto } from './dto/plant-analytics-query.dto';
 @Controller('analytics')
 @UseInterceptors(ClassSerializerInterceptor)
 export class AnalyticsController {
-  private readonly logger = new Logger(AnalyticsController.name);
-
   constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('inverters/:inverterId/max-power-by-day')
@@ -59,9 +56,6 @@ export class AnalyticsController {
     )
     query: InverterAnalyticsQueryDto,
   ): Promise<DailyMaxPowerResponseDto> {
-    this.logger.debug(
-      `getMaxPowerByDay called with inverterId: ${inverterId}, query: ${JSON.stringify(query)}`,
-    );
     const data = await this.analyticsService.getMaxPowerByDay(
       inverterId,
       query.data_inicio,
@@ -104,9 +98,6 @@ export class AnalyticsController {
     )
     query: InverterAnalyticsQueryDto,
   ): Promise<DailyAverageTemperatureResponseDto> {
-    this.logger.debug(
-      `getAverageTemperatureByDay called with inverterId: ${inverterId}, query: ${JSON.stringify(query)}`,
-    );
     const data = await this.analyticsService.getAverageTemperatureByDay(
       inverterId,
       query.data_inicio,
@@ -149,10 +140,6 @@ export class AnalyticsController {
     )
     query: InverterAnalyticsQueryDto,
   ): Promise<EnergyGenerationResponseDto> {
-    this.logger.debug(
-      `getInverterEnergyGeneration called for inverterId: ${inverterId}, query: ${JSON.stringify(query)}`,
-    );
-
     return this.analyticsService.getInverterEnergyGeneration(
       inverterId,
       query.data_inicio,
@@ -190,9 +177,6 @@ export class AnalyticsController {
     )
     query: PlantAnalyticsQueryDto,
   ): Promise<EnergyGenerationResponseDto> {
-    this.logger.debug(
-      `getPlantEnergyGeneration called for plantId: ${plantId}, query: ${JSON.stringify(query)}`,
-    );
     return this.analyticsService.getPlantEnergyGeneration(
       plantId,
       query.data_inicio,

@@ -41,8 +41,6 @@ describe('Application End-to-End Tests', () => {
     await app.init();
     httpServer = app.getHttpServer() as Server;
 
-    console.log('[E2E Global Setup] Ensuring metrics are ingested...');
-    const ingestionStartTime = Date.now();
     const ingestionResponse = await request(httpServer)
       .post('/metrics/ingest-file')
       .timeout(60000);
@@ -58,10 +56,6 @@ describe('Application End-to-End Tests', () => {
         ingestionBody.details.errors,
       );
     }
-    const ingestionTime = Date.now() - ingestionStartTime;
-    console.log(
-      `[E2E Global Setup] Metrics ingestion completed in ${ingestionTime}ms. Ingested: ${ingestionBody.details.ingested}`,
-    );
 
     const plantsResponse = await request(httpServer)
       .get('/plants')
@@ -86,9 +80,6 @@ describe('Application End-to-End Tests', () => {
       );
     }
     seededInverterIdForAnalytics = targetInverter.id;
-    console.log(
-      `[E2E Global Setup] Using Plant ID ${seededPlant1Id} (Usina 1) and Inverter ID ${seededInverterIdForAnalytics} (externalId 1) for analytics tests.`,
-    );
   });
 
   afterAll(async () => {

@@ -19,7 +19,6 @@ interface MockQueryBuilderMethods {
 }
 
 type MockRepository<T extends ObjectLiteral = any> = {
-  // <<< ADICIONAR RESTRIÇÃO AQUI
   [K in keyof Repository<T>]?: jest.Mock;
 } & {
   createQueryBuilder: jest.Mock<MockQueryBuilderMethods, [string?]>;
@@ -64,7 +63,7 @@ describe('AnalyticsService', () => {
 
   const mockPlantEntityWithInverters: Plant = {
     ...mockPlant,
-    id: mockPlant.id, // Ensure id is number
+    id: mockPlant.id,
     inverters: [
       mockInverter1ForPlant as Inverter,
       mockInverter2ForPlant as Inverter,
@@ -112,9 +111,9 @@ describe('AnalyticsService', () => {
       metricRepository.createQueryBuilder() as unknown as MockQueryBuilderMethods;
 
     (metricRepository.createQueryBuilder as jest.Mock).mockClear();
-    (inverterRepository.findOneBy as jest.Mock)?.mockClear(); // Add optional chaining for safety
-    (plantRepository.findOne as jest.Mock)?.mockClear(); // Add optional chaining for safety
-    (metricRepository.find as jest.Mock)?.mockClear(); // Add optional chaining for safety
+    (inverterRepository.findOneBy as jest.Mock)?.mockClear();
+    (plantRepository.findOne as jest.Mock)?.mockClear();
+    (metricRepository.find as jest.Mock)?.mockClear();
 
     mockQueryBuilder.select.mockClear().mockReturnThis();
     mockQueryBuilder.addSelect.mockClear().mockReturnThis();
