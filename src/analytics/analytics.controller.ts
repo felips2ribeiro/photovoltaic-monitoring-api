@@ -14,6 +14,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { InverterAnalyticsQueryDto } from './dto/inverter-analytics-query.dto';
 import { DailyMaxPowerResponseDto } from './dto/daily-max-power-response.dto';
 import { DailyAverageTemperatureResponseDto } from './dto/daily-average-temperature-response.dto';
+import { EnergyGenerationResponseDto } from './dto/energy-generation-response.dto';
 
 @ApiTags('analytics')
 @Controller('analytics')
@@ -111,5 +112,50 @@ export class AnalyticsController {
       query.data_fim,
     );
     return new DailyAverageTemperatureResponseDto({ data });
+  }
+
+  @Get('inverters/:inverterId/generation')
+  @ApiOperation({
+    summary:
+      'Calculate total energy generation for an inverter within a date range.',
+  })
+  @ApiParam({
+    name: 'inverterId',
+    type: Number,
+    required: true,
+    description: 'Internal ID of the inverter.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully calculated energy generation.',
+    type: EnergyGenerationResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Invalid parameters (e.g., missing required dates, date format, range).',
+  })
+  @ApiResponse({ status: 404, description: 'Inverter not found.' })
+  async getInverterEnergyGeneration(
+    @Param('inverterId', ParseIntPipe) inverterId: number,
+    @Query(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        forbidUnknownValues: true,
+      }),
+    )
+    query: InverterAnalyticsQueryDto,
+  ): Promise<EnergyGenerationResponseDto> {
+    this.logger.debug(
+      `getInverterEnergyGeneration called for inverterId: ${inverterId}, query: ${JSON.stringify(query)}`,
+    );
+
+    return this.analyticsService.getInverterEnergyGeneration(
+      inverterId,
+      query.data_inicio,
+      query.data_fim,
+    );
   }
 }
