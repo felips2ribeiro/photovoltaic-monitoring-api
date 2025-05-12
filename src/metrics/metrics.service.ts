@@ -12,7 +12,7 @@ import { validate } from 'class-validator';
 interface RawMetricRecord {
   datetime: { $date: string };
   inversor_id: number;
-  potencia_ativa_watt: number;
+  potencia_ativa_watt: number | null;
   temperatura_celsius?: number | null;
 }
 
@@ -26,9 +26,13 @@ export class MetricsService {
     private readonly invertersService: InvertersService,
   ) {}
 
-  async ingestMetricsFromFile(
-    fileName: string = 'metrics.json',
-  ): Promise<{ ingested: number; skipped: number; errors: string[] }> {
+  async ingestMetricsFromFile(fileName: string = 'metrics.json'): Promise<{
+    ingested: number;
+    skippedDueToValidation: number;
+    skippedDueToMissingInverter: number;
+    failedToSave: number;
+    errors: string[];
+  }> {
     this.logger.log(`Starting metrics ingestion from file: ${fileName}`);
     const filePath = path.join(process.cwd(), fileName);
 
@@ -79,9 +83,13 @@ export class MetricsService {
 
     const records: RawMetricRecord[] = parsedData as RawMetricRecord[];
 
-    let ingestedCount = 0;
-    let skippedCount = 0;
+    let validatedRecordCount = 0;
+    let skippedDueToValidationCount = 0;
+    let skippedDueToMissingInverterCount = 0;
+    let successfullyIngestedCount = 0;
+    const failedToSaveCount = 0;
     const errorMessages: string[] = [];
+    const metricsToSave: Metric[] = [];
 
     for (const rawRecord of records) {
       const recordDto = plainToInstance(IngestMetricRecordDto, rawRecord);
@@ -96,55 +104,76 @@ export class MetricsService {
         const message = `Validation failed for record (inverter_id: ${rawRecord.inversor_id}, timestamp: ${rawRecord.datetime?.$date}): ${errorDetails}`;
         this.logger.warn(message);
         errorMessages.push(message);
-        skippedCount++;
+        skippedDueToValidationCount++;
         continue;
       }
 
+      validatedRecordCount++;
       const inverter = await this.invertersService.findByExternalId(
         recordDto.inversor_id,
       );
+
       if (!inverter) {
         const message = `Inverter with externalId ${recordDto.inversor_id} not found for metric record. Skipping.`;
         this.logger.warn(message);
         errorMessages.push(message);
-        skippedCount++;
+        skippedDueToMissingInverterCount++;
         continue;
       }
 
+      const newMetricEntity = this.metricRepository.create({
+        inverter: inverter,
+        timestamp: recordDto.datetime,
+        activePower: recordDto.potencia_ativa_watt,
+        temperature: recordDto.temperatura_celsius,
+      });
+      metricsToSave.push(newMetricEntity);
+    }
+
+    this.logger.log(
+      `Processed ${records.length} records. Validated: ${validatedRecordCount}. Attempting to save ${metricsToSave.length} metrics in bulk.`,
+    );
+
+    if (metricsToSave.length > 0) {
       try {
-        const newMetric = this.metricRepository.create({
-          inverter: inverter,
-          inverterId: inverter.id,
-          timestamp: recordDto.datetime,
-          activePower: recordDto.potencia_ativa_watt,
-          temperature: recordDto.temperatura_celsius,
-        });
-        await this.metricRepository.save(newMetric);
-        ingestedCount++;
-      } catch (dbError) {
-        let errorMessage = `Unknown database error saving metric for inverter ${inverter.id} (externalId ${recordDto.inversor_id}) at ${recordDto.datetime.toISOString()}`;
+        await this.metricRepository.save(metricsToSave, { chunk: 500 });
+        successfullyIngestedCount = metricsToSave.length;
+        this.logger.log(
+          `Successfully bulk saved ${successfullyIngestedCount} metrics.`,
+        );
+      } catch (dbError: unknown) {
+        let errorMessage = `Unknown database error during bulk save of metrics.`;
         let errorStack: string | undefined;
         if (dbError instanceof Error) {
-          errorMessage = `Database error saving metric for inverter ${inverter.id} (externalId ${recordDto.inversor_id}) at ${recordDto.datetime.toISOString()}: ${dbError.message}`;
+          errorMessage = `Database error during bulk save of metrics: ${dbError.message}`;
           errorStack = dbError.stack;
         }
         this.logger.error(errorMessage, errorStack);
         errorMessages.push(errorMessage);
-        skippedCount++;
+
+        throw new Error(
+          `Metrics ingestion failed during bulk save: ${errorMessage}`,
+        );
       }
     }
 
+    const totalSkipped =
+      skippedDueToValidationCount +
+      skippedDueToMissingInverterCount +
+      failedToSaveCount;
     this.logger.log(
-      `Metrics ingestion finished. Ingested: ${ingestedCount}, Skipped: ${skippedCount}.`,
+      `Metrics ingestion finished. Total records: ${records.length}, Ingested: ${successfullyIngestedCount}, Skipped: ${totalSkipped}.`,
     );
     if (errorMessages.length > 0) {
       this.logger.warn(
-        `Ingestion completed with ${errorMessages.length} issues: \n${errorMessages.join('\n')}`,
+        `Ingestion completed with ${errorMessages.length} issues: \n${errorMessages.join('\n  - ')}`,
       );
     }
     return {
-      ingested: ingestedCount,
-      skipped: skippedCount,
+      ingested: successfullyIngestedCount,
+      skippedDueToValidation: skippedDueToValidationCount,
+      skippedDueToMissingInverter: skippedDueToMissingInverterCount,
+      failedToSave: failedToSaveCount,
       errors: errorMessages,
     };
   }
