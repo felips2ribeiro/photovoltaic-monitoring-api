@@ -13,6 +13,10 @@ import {
   DailyMaxPowerEntryDto,
 } from '../src/analytics/dto/daily-max-power-response.dto';
 import { Server } from 'http';
+import {
+  DailyAverageTemperatureEntryDto,
+  DailyAverageTemperatureResponseDto,
+} from '../src/analytics/dto/daily-average-temperature-response.dto';
 
 describe('Application End-to-End Tests', () => {
   let app: INestApplication;
@@ -497,6 +501,104 @@ describe('Application End-to-End Tests', () => {
           .query({ data_inicio: startDate, data_fim: endDate })
           .expect(HttpStatus.OK);
         const body = response.body as DailyMaxPowerResponseDto;
+        expect(body.data).toEqual([]);
+      });
+    });
+
+    describe('GET /analytics/inverters/:inverterId/average-temperature-by-day', () => {
+      it('should return daily average temperature for a valid inverter and date range', async () => {
+        if (!seededInverterIdForAnalytics) {
+          throw new Error(
+            'seededInverterIdForAnalytics was not set. Analytics tests cannot run.',
+          );
+        }
+
+        const startDate = '2025-01-08T00:00:00Z';
+        const endDate = '2025-01-08T23:59:59Z';
+
+        const response = await request(httpServer)
+          .get(
+            `/analytics/inverters/${seededInverterIdForAnalytics}/average-temperature-by-day`,
+          )
+          .query({ data_inicio: startDate, data_fim: endDate })
+          .expect(HttpStatus.OK);
+
+        const body = response.body as DailyAverageTemperatureResponseDto;
+        expect(body).toBeInstanceOf(Object);
+        expect(body.data).toBeInstanceOf(Array);
+
+        if (body.data.length > 0) {
+          const dayData = body.data.find(
+            (d: DailyAverageTemperatureEntryDto) => d.day === '2025-01-08',
+          );
+          expect(dayData).toBeDefined();
+          if (dayData) {
+            expect(
+              typeof dayData.averageTemperature === 'number' ||
+                dayData.averageTemperature === null,
+            ).toBe(true);
+          }
+        } else {
+          console.warn(
+            `[E2E Test AvgTemp] No average-temperature data for inverter ${seededInverterIdForAnalytics} in range ${startDate}-${endDate}. Verify metrics.json and ingestion.`,
+          );
+        }
+      }, 30000);
+
+      it('should return 404 if inverterId does not exist for average temperature', () => {
+        const startDate = '2025-01-01T00:00:00Z';
+        const endDate = '2025-01-01T23:59:59Z';
+        return request(httpServer)
+          .get('/analytics/inverters/999996/average-temperature-by-day')
+          .query({ data_inicio: startDate, data_fim: endDate })
+          .expect(HttpStatus.NOT_FOUND);
+      });
+
+      it('should return 400 if data_inicio is missing for average temperature', () => {
+        const targetInverterId = seededInverterIdForAnalytics || 1;
+        const endDate = '2025-01-01T23:59:59Z';
+        return request(httpServer)
+          .get(
+            `/analytics/inverters/${targetInverterId}/average-temperature-by-day`,
+          )
+          .query({ data_fim: endDate })
+          .expect(HttpStatus.BAD_REQUEST);
+      });
+
+      it('should return 400 if data_fim is missing for average temperature', () => {
+        const targetInverterId = seededInverterIdForAnalytics || 1;
+        const startDate = '2025-01-01T00:00:00Z';
+        return request(httpServer)
+          .get(
+            `/analytics/inverters/${targetInverterId}/average-temperature-by-day`,
+          )
+          .query({ data_inicio: startDate })
+          .expect(HttpStatus.BAD_REQUEST);
+      });
+
+      it('should return 400 if startDate is after endDate for average temperature', () => {
+        const targetInverterId = seededInverterIdForAnalytics || 1;
+        const startDate = '2025-01-02T00:00:00Z';
+        const endDate = '2025-01-01T23:59:59Z';
+        return request(httpServer)
+          .get(
+            `/analytics/inverters/${targetInverterId}/average-temperature-by-day`,
+          )
+          .query({ data_inicio: startDate, data_fim: endDate })
+          .expect(HttpStatus.BAD_REQUEST);
+      });
+
+      it('should return empty data array if no metrics with temperature in range', async () => {
+        const targetInverterId = seededInverterIdForAnalytics || 1;
+        const startDate = '2000-01-01T00:00:00Z';
+        const endDate = '2000-01-01T23:59:59Z';
+        const response = await request(httpServer)
+          .get(
+            `/analytics/inverters/${targetInverterId}/average-temperature-by-day`,
+          )
+          .query({ data_inicio: startDate, data_fim: endDate })
+          .expect(HttpStatus.OK);
+        const body = response.body as DailyAverageTemperatureResponseDto;
         expect(body.data).toEqual([]);
       });
     });
