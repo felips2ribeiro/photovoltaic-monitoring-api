@@ -8,6 +8,12 @@ import { Metric } from '../metrics/entities/metric.entity';
 import { Repository } from 'typeorm';
 import { Inverter } from '../inverters/entities/inverter.entity';
 import { DailyMaxPowerEntryDto } from './dto/daily-max-power-response.dto';
+import { DailyAverageTemperatureEntryDto } from './dto/daily-average-temperature-response.dto';
+
+interface AggregatedDailyValue {
+  day: string;
+  value: number | string | null;
+}
 
 @Injectable()
 export class AnalyticsService {
@@ -18,11 +24,11 @@ export class AnalyticsService {
     private readonly inverterRepository: Repository<Inverter>,
   ) {}
 
-  async getMaxPowerByDay(
+  private async validateInverterAndDateRange(
     inverterId: number,
     startDate: Date,
     endDate: Date,
-  ): Promise<DailyMaxPowerEntryDto[]> {
+  ): Promise<Date> {
     const inverter = await this.inverterRepository.findOneBy({
       id: inverterId,
     });
@@ -40,36 +46,99 @@ export class AnalyticsService {
 
     const adjustedEndDate = new Date(endDate);
     adjustedEndDate.setHours(23, 59, 59, 999);
+    return adjustedEndDate;
+  }
 
+  private async getAggregatedDailyData(
+    inverterId: number,
+    startDate: Date,
+    adjustedEndDate: Date,
+    aggregationFunction: string,
+    valueAlias: string,
+    valueColumnName: string,
+  ): Promise<AggregatedDailyValue[]> {
     const queryBuilder = this.metricRepository.createQueryBuilder('metric');
 
     const results = await queryBuilder
       .select("strftime('%Y-%m-%d', metric.timestamp)", 'day')
-      .addSelect('MAX(metric.activePower)', 'maxActivePower')
+      .addSelect(aggregationFunction, valueAlias)
       .where('metric.inverterId = :inverterId', { inverterId })
       .andWhere('metric.timestamp >= :startDate', { startDate })
       .andWhere('metric.timestamp <= :adjustedEndDate', {
         adjustedEndDate: adjustedEndDate.toISOString(),
       })
-      .andWhere('metric.activePower IS NOT NULL')
+      .andWhere(`metric.${valueColumnName} IS NOT NULL`)
       .groupBy('day')
       .orderBy('day', 'ASC')
-      .getRawMany<{ day: string; maxActivePower: string | number | null }>();
+      .getRawMany<{ day: string; [key: string]: number | string | null }>();
 
-    return results.map((item) => {
-      let finalMaxPower: number | null = null;
+    return results.map((item) => ({
+      day: item.day,
+      value: item[valueAlias],
+    }));
+  }
 
-      if (item.maxActivePower !== null && item.maxActivePower !== undefined) {
-        const numPower = parseFloat(String(item.maxActivePower));
-        if (!isNaN(numPower)) {
-          finalMaxPower = parseFloat(numPower.toFixed(2));
-        }
+  private formatAggregatedValue(
+    rawValue: number | string | null,
+  ): number | null {
+    if (rawValue !== null && rawValue !== undefined) {
+      const numValue = parseFloat(String(rawValue));
+      if (!isNaN(numValue)) {
+        return parseFloat(numValue.toFixed(2));
       }
+    }
+    return null;
+  }
 
-      return {
-        day: item.day,
-        maxActivePower: finalMaxPower,
-      };
-    });
+  async getMaxPowerByDay(
+    inverterId: number,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<DailyMaxPowerEntryDto[]> {
+    const adjustedEndDate = await this.validateInverterAndDateRange(
+      inverterId,
+      startDate,
+      endDate,
+    );
+
+    const aggregatedData = await this.getAggregatedDailyData(
+      inverterId,
+      startDate,
+      adjustedEndDate,
+      'MAX(metric.activePower)',
+      'maxActivePower',
+      'activePower',
+    );
+
+    return aggregatedData.map((item) => ({
+      day: item.day,
+      maxActivePower: this.formatAggregatedValue(item.value),
+    }));
+  }
+
+  async getAverageTemperatureByDay(
+    inverterId: number,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<DailyAverageTemperatureEntryDto[]> {
+    const adjustedEndDate = await this.validateInverterAndDateRange(
+      inverterId,
+      startDate,
+      endDate,
+    );
+
+    const aggregatedData = await this.getAggregatedDailyData(
+      inverterId,
+      startDate,
+      adjustedEndDate,
+      'AVG(metric.temperature)',
+      'averageTemperature',
+      'temperature',
+    );
+
+    return aggregatedData.map((item) => ({
+      day: item.day,
+      averageTemperature: this.formatAggregatedValue(item.value),
+    }));
   }
 }
