@@ -18,7 +18,6 @@ async function bootstrap() {
     }),
   );
 
-  // Configurar Swagger
   const config = new DocumentBuilder()
     .setTitle('Photovoltaic Monitoring API')
     .setDescription('API for monitoring photovoltaic power plants')

@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsController } from './analytics.controller';
-import { MetricsModule } from '../metrics/metrics.module';
-import { InvertersModule } from '../inverters/inverters.module';
-import { PlantsModule } from '../plants/plants.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Metric } from '../metrics/entities/metric.entity';
+import { Inverter } from '../inverters/entities/inverter.entity';
 
 @Module({
-  imports: [MetricsModule, InvertersModule, PlantsModule],
+  imports: [TypeOrmModule.forFeature([Metric, Inverter])],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
 })
