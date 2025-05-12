@@ -11,10 +11,12 @@ import {
   DailyAverageTemperatureEntryDto,
   DailyAverageTemperatureResponseDto,
 } from './dto/daily-average-temperature-response.dto';
+import { EnergyGenerationResponseDto } from './dto/energy-generation-response.dto';
 
 const mockAnalyticsService = {
   getMaxPowerByDay: jest.fn(),
   getAverageTemperatureByDay: jest.fn(),
+  getInverterEnergyGeneration: jest.fn(),
 };
 
 describe('AnalyticsController', () => {
@@ -46,6 +48,7 @@ describe('AnalyticsController', () => {
 
     mockAnalyticsService.getMaxPowerByDay.mockClear();
     mockAnalyticsService.getAverageTemperatureByDay.mockClear();
+    mockAnalyticsService.getInverterEnergyGeneration.mockClear();
   });
 
   it('should be defined', () => {
@@ -179,6 +182,85 @@ describe('AnalyticsController', () => {
 
       await expect(
         controller.getAverageTemperatureByDay(mockInverterId, mockQueryDto),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+  describe('getInverterEnergyGeneration', () => {
+    const mockEnergyGenerationResponse: EnergyGenerationResponseDto =
+      new EnergyGenerationResponseDto({
+        totalGenerationWh: 1234.56,
+        startDate: mockQueryDto.data_inicio,
+        endDate: mockQueryDto.data_fim,
+        entityId: mockInverterId,
+        entityType: 'inverter',
+      });
+
+    it('should call analyticsService.getInverterEnergyGeneration and return an EnergyGenerationResponseDto', async () => {
+      mockAnalyticsService.getInverterEnergyGeneration.mockResolvedValue(
+        mockEnergyGenerationResponse,
+      );
+
+      const result = await controller.getInverterEnergyGeneration(
+        mockInverterId,
+        mockQueryDto,
+      );
+
+      expect(
+        mockAnalyticsService.getInverterEnergyGeneration,
+      ).toHaveBeenCalledWith(
+        mockInverterId,
+        mockQueryDto.data_inicio,
+        mockQueryDto.data_fim,
+      );
+
+      expect(result).toEqual(mockEnergyGenerationResponse);
+    });
+
+    it('should return 0 generation if service returns 0', async () => {
+      const zeroGenerationResponse = new EnergyGenerationResponseDto({
+        totalGenerationWh: 0,
+        startDate: mockQueryDto.data_inicio,
+        endDate: mockQueryDto.data_fim,
+        entityId: mockInverterId,
+        entityType: 'inverter',
+      });
+      mockAnalyticsService.getInverterEnergyGeneration.mockResolvedValue(
+        zeroGenerationResponse,
+      );
+
+      const result = await controller.getInverterEnergyGeneration(
+        mockInverterId,
+        mockQueryDto,
+      );
+
+      expect(
+        mockAnalyticsService.getInverterEnergyGeneration,
+      ).toHaveBeenCalledWith(
+        mockInverterId,
+        mockQueryDto.data_inicio,
+        mockQueryDto.data_fim,
+      );
+      expect(result.totalGenerationWh).toEqual(0);
+      expect(result).toEqual(zeroGenerationResponse);
+    });
+
+    it('should propagate NotFoundException from getInverterEnergyGeneration service', async () => {
+      mockAnalyticsService.getInverterEnergyGeneration.mockRejectedValue(
+        new NotFoundException('Inverter not found for generation'),
+      );
+
+      await expect(
+        controller.getInverterEnergyGeneration(mockInverterId, mockQueryDto),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should propagate BadRequestException from getInverterEnergyGeneration service', async () => {
+      mockAnalyticsService.getInverterEnergyGeneration.mockRejectedValue(
+        new BadRequestException('Invalid date range for generation'),
+      );
+
+      await expect(
+        controller.getInverterEnergyGeneration(mockInverterId, mockQueryDto),
       ).rejects.toThrow(BadRequestException);
     });
   });
