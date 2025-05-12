@@ -32,7 +32,7 @@ export class Metric {
   activePower: number;
 
   @Column({ type: 'float', nullable: true })
-  temperature?: number;
+  temperature?: number | null;
 
   @CreateDateColumn()
   ingestedAt: Date;

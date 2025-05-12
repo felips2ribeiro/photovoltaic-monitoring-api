@@ -1,57 +1,68 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform, Type } from 'class-transformer';
+import { Transform, TransformFnParams } from 'class-transformer';
 import {
   IsNotEmpty,
   IsNumber,
   IsInt,
-  IsDate,
   IsOptional,
   Min,
-  ValidateNested,
-  IsISO8601,
-  IsObject,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  ValidationArguments,
+  Validate,
 } from 'class-validator';
 
-class DateTimeDto {
-  @ApiProperty({
-    description: 'Timestamp of the reading in ISO 8601 format',
-    example: '2023-10-26T10:00:00Z',
-  })
-  @IsISO8601(
-    {},
-    { message: 'Timestamp $date must be a valid ISO 8601 date string' },
-  )
-  @IsNotEmpty({ message: 'Timestamp $date should not be empty' })
+@ValidatorConstraint({ name: 'isInstanceOfDate', async: false })
+export class IsInstanceOfDateConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(value: unknown) {
+    return value instanceof Date && !isNaN(value.getTime());
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    return `${args.property} must be a valid Date object.`;
+  }
+}
+
+interface DateTimeInputValue {
   $date: string;
+}
+
+function isDateTimeInputValue(value: unknown): value is DateTimeInputValue {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const potential = value as Record<string, unknown>;
+  return typeof potential.$date === 'string';
 }
 
 export class IngestMetricRecordDto {
   @ApiProperty({
-    description: 'Nested datetime object containing the ISO 8601 timestamp',
-    type: () => DateTimeDto,
-    example: { $date: '2025-01-01T03:05:22.733Z' },
+    description:
+      'Nested datetime object { "$date": "ISO_STRING" }, will be transformed to Date',
+    example: { $date: '2023-10-26T10:00:00Z' },
   })
-  @IsNotEmpty({ message: 'datetime object should not be empty' })
-  @IsObject({ message: 'datetime must be an object' })
-  @ValidateNested({ message: 'Invalid datetime object structure' })
-  @Type(() => DateTimeDto)
+  @IsNotEmpty({ message: 'datetime field should not be empty' })
   @Transform(
-    ({ value }: { value: DateTimeDto }) => {
-      if (value && value.$date) {
+    ({ value }: TransformFnParams): Date | undefined => {
+      if (isDateTimeInputValue(value)) {
         const dateObj = new Date(value.$date);
-        return isNaN(dateObj.getTime()) ? undefined : dateObj;
+        if (!isNaN(dateObj.getTime())) {
+          return dateObj;
+        }
       }
       return undefined;
     },
     { toClassOnly: true },
   )
-  @IsDate({ message: 'datetime must transform into a valid Date object' })
+  @Validate(IsInstanceOfDateConstraint)
   datetime: Date;
 
   @ApiProperty({ description: 'External Inverter ID', example: 1 })
   @IsNumber({}, { message: 'inversor_id must be a number' })
   @IsInt({ message: 'inversor_id must be an integer' })
-  @Min(1, { message: 'inversor_id must be at least 1' })
+  @Min(1, { message: 'inversor_id must be at least 1.' })
   @IsNotEmpty({ message: 'inversor_id should not be empty' })
   inversor_id: number;
 
