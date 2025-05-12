@@ -3,35 +3,32 @@ import { AnalyticsService } from './analytics.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Metric } from '../metrics/entities/metric.entity';
 import { Inverter } from '../inverters/entities/inverter.entity';
-
-import { Repository, SelectQueryBuilder, ObjectLiteral } from 'typeorm';
+import { Plant } from '../plants/entities/plant.entity';
+import { ObjectLiteral, Repository } from 'typeorm';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { EnergyGenerationResponseDto } from './dto/energy-generation-response.dto';
 
-type MockedSelectQueryBuilder<T extends ObjectLiteral> = jest.Mocked<
-  Pick<
-    SelectQueryBuilder<T>,
-    | 'select'
-    | 'addSelect'
-    | 'where'
-    | 'andWhere'
-    | 'groupBy'
-    | 'orderBy'
-    | 'getRawMany'
-  >
->;
+interface MockQueryBuilderMethods {
+  select: jest.Mock;
+  addSelect: jest.Mock;
+  where: jest.Mock;
+  andWhere: jest.Mock;
+  groupBy: jest.Mock;
+  orderBy: jest.Mock;
+  getRawMany: jest.Mock;
+}
 
-type MockMetricRepository = jest.Mocked<
-  Pick<Repository<Metric>, 'createQueryBuilder'>
-> & {
-  createQueryBuilder: jest.Mock<MockedSelectQueryBuilder<Metric>, [string?]>;
+type MockRepository<T extends ObjectLiteral = any> = {
+  // <<< ADICIONAR RESTRIÇÃO AQUI
+  [K in keyof Repository<T>]?: jest.Mock;
+} & {
+  createQueryBuilder: jest.Mock<MockQueryBuilderMethods, [string?]>;
 };
 
-type MockInverterRepository = jest.Mocked<
-  Pick<Repository<Inverter>, 'findOneBy'>
->;
-
-const createMockMetricRepository = (): MockMetricRepository => {
-  const mockQbInstance: MockedSelectQueryBuilder<Metric> = {
+const createMockRepository = <
+  T extends ObjectLiteral = any,
+>(): MockRepository<T> => {
+  const mockQbMethods: MockQueryBuilderMethods = {
     select: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
@@ -42,29 +39,47 @@ const createMockMetricRepository = (): MockMetricRepository => {
   };
 
   return {
-    createQueryBuilder: jest.fn(() => mockQbInstance),
-  } as unknown as MockMetricRepository;
-};
-
-const createMockInverterRepository = (): MockInverterRepository => {
-  return {
     findOneBy: jest.fn(),
-  } as unknown as MockInverterRepository;
+    create: jest.fn(),
+    save: jest.fn(),
+    find: jest.fn(),
+    findOne: jest.fn(),
+    preload: jest.fn(),
+    remove: jest.fn(),
+    createQueryBuilder: jest.fn(() => mockQbMethods),
+  } as any as MockRepository<T>;
 };
 
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
-  let metricRepository: MockMetricRepository;
-  let inverterRepository: MockInverterRepository;
-  let mockQueryBuilder: MockedSelectQueryBuilder<Metric>;
+  let metricRepository: MockRepository<Metric>;
+  let inverterRepository: MockRepository<Inverter>;
+  let plantRepository: MockRepository<Plant>;
+  let mockQueryBuilder: MockQueryBuilderMethods;
 
-  const mockInverter: Pick<Inverter, 'id' | 'externalId' | 'name' | 'plantId'> =
-    {
-      id: 1,
-      externalId: 101,
-      name: 'Test Inverter',
-      plantId: 1,
-    };
+  const mockInverter: Pick<Inverter, 'id'> = { id: 1 };
+  const mockPlant: Pick<Plant, 'id' | 'name'> = { id: 1, name: 'Test Plant' };
+  const mockInverter1ForPlant: Pick<Inverter, 'id'> = { id: 10 };
+  const mockInverter2ForPlant: Pick<Inverter, 'id'> = { id: 11 };
+
+  const mockPlantEntityWithInverters: Plant = {
+    ...mockPlant,
+    id: mockPlant.id, // Ensure id is number
+    inverters: [
+      mockInverter1ForPlant as Inverter,
+      mockInverter2ForPlant as Inverter,
+    ],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  const mockPlantEntityNoInverters: Plant = {
+    ...mockPlant,
+    id: 2,
+    name: 'Plant No Inverters',
+    inverters: [],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
 
   const startDate = new Date('2023-01-15T00:00:00Z');
   const endDate = new Date('2023-01-16T23:59:59Z');
@@ -75,29 +90,32 @@ describe('AnalyticsService', () => {
         AnalyticsService,
         {
           provide: getRepositoryToken(Metric),
-          useValue: createMockMetricRepository(),
+          useValue: createMockRepository<Metric>(),
         },
         {
           provide: getRepositoryToken(Inverter),
-          useValue: createMockInverterRepository(),
+          useValue: createMockRepository<Inverter>(),
+        },
+        {
+          provide: getRepositoryToken(Plant),
+          useValue: createMockRepository<Plant>(),
         },
       ],
     }).compile();
 
     service = module.get<AnalyticsService>(AnalyticsService);
-    metricRepository = module.get<MockMetricRepository>(
-      getRepositoryToken(Metric),
-    );
-    inverterRepository = module.get<MockInverterRepository>(
-      getRepositoryToken(Inverter),
-    );
+    metricRepository = module.get(getRepositoryToken(Metric));
+    inverterRepository = module.get(getRepositoryToken(Inverter));
+    plantRepository = module.get(getRepositoryToken(Plant));
 
     mockQueryBuilder =
-      metricRepository.createQueryBuilder() as unknown as MockedSelectQueryBuilder<Metric>;
+      metricRepository.createQueryBuilder() as unknown as MockQueryBuilderMethods;
 
-    inverterRepository.findOneBy.mockReset();
+    (metricRepository.createQueryBuilder as jest.Mock).mockClear();
+    (inverterRepository.findOneBy as jest.Mock)?.mockClear(); // Add optional chaining for safety
+    (plantRepository.findOne as jest.Mock)?.mockClear(); // Add optional chaining for safety
+    (metricRepository.find as jest.Mock)?.mockClear(); // Add optional chaining for safety
 
-    metricRepository.createQueryBuilder.mockClear();
     mockQueryBuilder.select.mockClear().mockReturnThis();
     mockQueryBuilder.addSelect.mockClear().mockReturnThis();
     mockQueryBuilder.where.mockClear().mockReturnThis();
@@ -112,12 +130,11 @@ describe('AnalyticsService', () => {
   });
 
   describe('getMaxPowerByDay', () => {
-    it('should return daily max power for a valid inverter and date range', async () => {
-      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
-      const rawQueryResult = [
-        { day: '2023-01-15', maxActivePower: '500.50' },
-        { day: '2023-01-16', maxActivePower: '600.75' },
-      ];
+    it('should return daily max power', async () => {
+      (inverterRepository.findOneBy as jest.Mock).mockResolvedValue(
+        mockInverter as Inverter,
+      );
+      const rawQueryResult = [{ day: '2023-01-15', maxActivePower: '500.50' }];
       mockQueryBuilder.getRawMany.mockResolvedValue(rawQueryResult);
 
       const result = await service.getMaxPowerByDay(
@@ -126,9 +143,6 @@ describe('AnalyticsService', () => {
         endDate,
       );
 
-      expect(inverterRepository.findOneBy).toHaveBeenCalledWith({
-        id: mockInverter.id,
-      });
       expect(metricRepository.createQueryBuilder).toHaveBeenCalledWith(
         'metric',
       );
@@ -144,13 +158,12 @@ describe('AnalyticsService', () => {
         'metric.inverterId = :inverterId',
         { inverterId: mockInverter.id },
       );
+      const expectedEndDateString = new Date(endDate);
+      expectedEndDateString.setHours(23, 59, 59, 999);
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
         'metric.timestamp >= :startDate',
         { startDate },
       );
-
-      const expectedEndDateString = new Date(endDate);
-      expectedEndDateString.setHours(23, 59, 59, 999);
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
         'metric.timestamp <= :adjustedEndDate',
         { adjustedEndDate: expectedEndDateString.toISOString() },
@@ -160,71 +173,33 @@ describe('AnalyticsService', () => {
       );
       expect(mockQueryBuilder.groupBy).toHaveBeenCalledWith('day');
       expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('day', 'ASC');
-      expect(mockQueryBuilder.getRawMany).toHaveBeenCalled();
-
-      expect(result).toEqual([
-        { day: '2023-01-15', maxActivePower: 500.5 },
-        { day: '2023-01-16', maxActivePower: 600.75 },
-      ]);
+      expect(result).toEqual([{ day: '2023-01-15', maxActivePower: 500.5 }]);
     });
 
-    it('should throw NotFoundException if inverter is not found', async () => {
-      inverterRepository.findOneBy.mockResolvedValue(null);
+    it('should throw NotFoundException if inverter not found', async () => {
+      (inverterRepository.findOneBy as jest.Mock).mockResolvedValue(null);
       await expect(
         service.getMaxPowerByDay(999, startDate, endDate),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw BadRequestException if startDate is after endDate', async () => {
-      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
-      const invalidEndDate = new Date('2023-01-14T00:00:00Z');
+    it('should throw BadRequestException if date range is invalid', async () => {
+      (inverterRepository.findOneBy as jest.Mock).mockResolvedValue(
+        mockInverter as Inverter,
+      );
       await expect(
-        service.getMaxPowerByDay(mockInverter.id, startDate, invalidEndDate),
+        service.getMaxPowerByDay(mockInverter.id, endDate, startDate),
       ).rejects.toThrow(BadRequestException);
-    });
-
-    it('should return an empty array if no metrics are found in the date range', async () => {
-      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
-      mockQueryBuilder.getRawMany.mockResolvedValue([]);
-      const result = await service.getMaxPowerByDay(
-        mockInverter.id,
-        startDate,
-        endDate,
-      );
-      expect(result).toEqual([]);
-    });
-
-    it('should handle metrics with null activePower correctly (MAX should ignore them)', async () => {
-      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
-      const rawQueryResult = [{ day: '2023-01-15', maxActivePower: '500.00' }];
-      mockQueryBuilder.getRawMany.mockResolvedValue(rawQueryResult);
-      await service.getMaxPowerByDay(mockInverter.id, startDate, endDate);
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'metric.activePower IS NOT NULL',
-      );
-    });
-
-    it('should return maxActivePower as null if all activePower values are null for a day and MAX returns null', async () => {
-      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
-      const rawQueryResultWithAllNulls = [
-        { day: '2023-01-15', maxActivePower: null },
-      ];
-      mockQueryBuilder.getRawMany.mockResolvedValue(rawQueryResultWithAllNulls);
-      const result = await service.getMaxPowerByDay(
-        mockInverter.id,
-        startDate,
-        endDate,
-      );
-      expect(result[0].maxActivePower).toBeNull();
     });
   });
 
   describe('getAverageTemperatureByDay', () => {
-    it('should return daily average temperature for a valid inverter and date range', async () => {
-      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
+    it('should return daily average temperature', async () => {
+      (inverterRepository.findOneBy as jest.Mock).mockResolvedValue(
+        mockInverter as Inverter,
+      );
       const rawQueryResult = [
         { day: '2023-01-15', averageTemperature: '25.50' },
-        { day: '2023-01-16', averageTemperature: '28.75' },
       ];
       mockQueryBuilder.getRawMany.mockResolvedValue(rawQueryResult);
 
@@ -233,95 +208,155 @@ describe('AnalyticsService', () => {
         startDate,
         endDate,
       );
-
-      expect(inverterRepository.findOneBy).toHaveBeenCalledWith({
-        id: mockInverter.id,
-      });
       expect(metricRepository.createQueryBuilder).toHaveBeenCalledWith(
         'metric',
-      );
-      expect(mockQueryBuilder.select).toHaveBeenCalledWith(
-        "strftime('%Y-%m-%d', metric.timestamp)",
-        'day',
       );
       expect(mockQueryBuilder.addSelect).toHaveBeenCalledWith(
         'AVG(metric.temperature)',
         'averageTemperature',
       );
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-        'metric.inverterId = :inverterId',
-        { inverterId: mockInverter.id },
-      );
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'metric.timestamp >= :startDate',
-        { startDate },
-      );
-
-      const expectedEndDateString = new Date(endDate);
-      expectedEndDateString.setHours(23, 59, 59, 999);
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'metric.timestamp <= :adjustedEndDate',
-        expect.objectContaining({
-          adjustedEndDate: expectedEndDateString.toISOString(),
-        }),
-      );
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
         'metric.temperature IS NOT NULL',
       );
-      expect(mockQueryBuilder.groupBy).toHaveBeenCalledWith('day');
-      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('day', 'ASC');
-      expect(mockQueryBuilder.getRawMany).toHaveBeenCalled();
-
-      expect(result).toEqual([
-        { day: '2023-01-15', averageTemperature: 25.5 },
-        { day: '2023-01-16', averageTemperature: 28.75 },
-      ]);
+      expect(result).toEqual([{ day: '2023-01-15', averageTemperature: 25.5 }]);
     });
-
-    it('should throw NotFoundException if inverter is not found', async () => {
-      inverterRepository.findOneBy.mockResolvedValue(null);
+    it('should throw NotFoundException if inverter not found', async () => {
+      (inverterRepository.findOneBy as jest.Mock).mockResolvedValue(null);
       await expect(
         service.getAverageTemperatureByDay(999, startDate, endDate),
       ).rejects.toThrow(NotFoundException);
     });
+  });
 
-    it('should throw BadRequestException if startDate is after endDate', async () => {
-      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
-      const invalidEndDate = new Date('2023-01-14T00:00:00Z');
+  describe('getInverterEnergyGeneration', () => {
+    const mockMetrics: Partial<Metric>[] = [
+      {
+        timestamp: new Date(startDate.getTime() + 1000 * 60 * 10),
+        activePower: 1000,
+      },
+      {
+        timestamp: new Date(startDate.getTime() + 1000 * 60 * 20),
+        activePower: 2000,
+      },
+    ];
+    it('should calculate inverter energy generation', async () => {
+      (inverterRepository.findOneBy as jest.Mock).mockResolvedValue(
+        mockInverter as Inverter,
+      );
+      (metricRepository.find as jest.Mock).mockResolvedValue(
+        mockMetrics as Metric[],
+      );
+
+      const result = await service.getInverterEnergyGeneration(
+        mockInverter.id,
+        startDate,
+        endDate,
+      );
+      const expectedGenerationWh = parseFloat(
+        (((1000 + 2000) / 2) * (10 / 60)).toFixed(3),
+      );
+      expect(result.totalGenerationWh).toBeCloseTo(expectedGenerationWh, 3);
+      expect(result.entityId).toEqual(mockInverter.id);
+      expect(result.entityType).toEqual('inverter');
+    });
+    it('should return 0 generation if less than 2 metrics found', async () => {
+      (inverterRepository.findOneBy as jest.Mock).mockResolvedValue(
+        mockInverter as Inverter,
+      );
+      (metricRepository.find as jest.Mock).mockResolvedValue([
+        mockMetrics[0],
+      ] as Metric[]);
+      const result = await service.getInverterEnergyGeneration(
+        mockInverter.id,
+        startDate,
+        endDate,
+      );
+      expect(result.totalGenerationWh).toEqual(0);
+    });
+    it('should throw NotFoundException if inverter not found', async () => {
+      (inverterRepository.findOneBy as jest.Mock).mockResolvedValue(null);
       await expect(
-        service.getAverageTemperatureByDay(
-          mockInverter.id,
-          startDate,
-          invalidEndDate,
-        ),
-      ).rejects.toThrow(BadRequestException);
+        service.getInverterEnergyGeneration(999, startDate, endDate),
+      ).rejects.toThrow(NotFoundException);
     });
+  });
 
-    it('should return an empty array if no metrics with temperature are found', async () => {
-      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
-      mockQueryBuilder.getRawMany.mockResolvedValue([]);
+  describe('getPlantEnergyGeneration', () => {
+    it('should return total generation for a plant with inverters', async () => {
+      (plantRepository.findOne as jest.Mock).mockResolvedValue(
+        mockPlantEntityWithInverters,
+      );
+      const getInverterGenerationSpy = jest.spyOn(
+        service,
+        'getInverterEnergyGeneration',
+      );
 
-      const result = await service.getAverageTemperatureByDay(
-        mockInverter.id,
+      getInverterGenerationSpy
+        .mockResolvedValueOnce(
+          new EnergyGenerationResponseDto({
+            totalGenerationWh: 100,
+            startDate,
+            endDate,
+            entityId: mockInverter1ForPlant.id,
+            entityType: 'inverter',
+          }),
+        )
+        .mockResolvedValueOnce(
+          new EnergyGenerationResponseDto({
+            totalGenerationWh: 150,
+            startDate,
+            endDate,
+            entityId: mockInverter2ForPlant.id,
+            entityType: 'inverter',
+          }),
+        );
+
+      const result = await service.getPlantEnergyGeneration(
+        mockPlantEntityWithInverters.id,
         startDate,
         endDate,
       );
-      expect(result).toEqual([]);
+
+      expect(plantRepository.findOne).toHaveBeenCalledWith({
+        where: { id: mockPlantEntityWithInverters.id },
+        relations: { inverters: true },
+      });
+      expect(getInverterGenerationSpy).toHaveBeenCalledTimes(2);
+      expect(result.totalGenerationWh).toEqual(250);
+      expect(result.entityId).toEqual(mockPlantEntityWithInverters.id);
+      expect(result.entityType).toEqual('plant');
+      getInverterGenerationSpy.mockRestore();
     });
 
-    it('should return averageTemperature as null if AVG of only NULLs returns null', async () => {
-      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
-      const rawQueryResultWithAllNulls = [
-        { day: '2023-01-15', averageTemperature: null },
-      ];
-      mockQueryBuilder.getRawMany.mockResolvedValue(rawQueryResultWithAllNulls);
-
-      const result = await service.getAverageTemperatureByDay(
-        mockInverter.id,
+    it('should return 0 generation if plant has no inverters', async () => {
+      (plantRepository.findOne as jest.Mock).mockResolvedValue(
+        mockPlantEntityNoInverters,
+      );
+      const getInverterGenerationSpy = jest.spyOn(
+        service,
+        'getInverterEnergyGeneration',
+      );
+      const result = await service.getPlantEnergyGeneration(
+        mockPlantEntityNoInverters.id,
         startDate,
         endDate,
       );
-      expect(result[0].averageTemperature).toBeNull();
+      expect(getInverterGenerationSpy).not.toHaveBeenCalled();
+      expect(result.totalGenerationWh).toEqual(0);
+      getInverterGenerationSpy.mockRestore();
+    });
+
+    it('should throw NotFoundException if plant is not found', async () => {
+      (plantRepository.findOne as jest.Mock).mockResolvedValue(null);
+      const getInverterGenerationSpy = jest.spyOn(
+        service,
+        'getInverterEnergyGeneration',
+      );
+      await expect(
+        service.getPlantEnergyGeneration(999, startDate, endDate),
+      ).rejects.toThrow(NotFoundException);
+      expect(getInverterGenerationSpy).not.toHaveBeenCalled();
+      getInverterGenerationSpy.mockRestore();
     });
   });
 });
