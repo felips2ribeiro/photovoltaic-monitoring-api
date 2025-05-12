@@ -137,7 +137,12 @@ Principais grupos de endpoints:
         -   **Parâmetro de Rota:** `inverterId` (number).
         -   **Query Parameters Obrigatórios:** `data_inicio` (string ISO 8601), `data_fim` (string ISO 8601).
         -   **Resposta de Sucesso (200 OK):** Array de objetos `{ "day": "YYYY-MM-DD", "averageTemperature": number | null }`.
-    -   *(Outros endpoints de analytics a serem implementados)*
+    -   **Geração de Energia por Inversor**
+        -   **Endpoint:** `GET /analytics/inverters/:inverterId/generation`
+        -   **Descrição:** Calcula a geração total de energia (em Watt-hora) para um inversor específico, dentro de um intervalo de datas. Utiliza a integral da potência ativa ao longo do tempo (regra do trapézio). Leituras com potência ativa nula são ignoradas
+        -   **Parâmetro de Rota:** `inverterId` (number).
+        -   **Query Parameters Obrigatórios:** `data_inicio` (string ISO 8601), `data_fim` (string ISO 8601).
+        -   **Resposta de Sucesso (200 OK):** Objeto `{ "totalGenerationWh": number, "startDate": "ISO_STRING", "endDate": "ISO_STRING", "entityId": number, "entityType": "inverter" }`.
 
 ## Decisões de Design e Justificativas
 
