@@ -54,13 +54,22 @@ export class AnalyticsService {
       .andWhere('metric.activePower IS NOT NULL')
       .groupBy('day')
       .orderBy('day', 'ASC')
-      .getRawMany<{ day: string; maxActivePower: string | number }>();
+      .getRawMany<{ day: string; maxActivePower: string | number | null }>();
 
-    return results.map((item) => ({
-      day: item.day,
-      maxActivePower: parseFloat(
-        parseFloat(String(item.maxActivePower)).toFixed(2),
-      ),
-    }));
+    return results.map((item) => {
+      let finalMaxPower: number | null = null;
+
+      if (item.maxActivePower !== null && item.maxActivePower !== undefined) {
+        const numPower = parseFloat(String(item.maxActivePower));
+        if (!isNaN(numPower)) {
+          finalMaxPower = parseFloat(numPower.toFixed(2));
+        }
+      }
+
+      return {
+        day: item.day,
+        maxActivePower: finalMaxPower,
+      };
+    });
   }
 }

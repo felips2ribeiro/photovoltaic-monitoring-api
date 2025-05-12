@@ -11,10 +11,12 @@ export class DailyMaxPowerEntryDto {
 
   @ApiProperty({
     example: 7500.5,
-    description: 'Maximum active power recorded on this day in Watts (W)',
+    description:
+      'Maximum active power recorded on this day in Watts (W). Can be null if no valid data for the day.',
+    nullable: true,
   })
   @Expose()
-  maxActivePower: number;
+  maxActivePower: number | null;
 }
 
 export class DailyMaxPowerResponseDto {
