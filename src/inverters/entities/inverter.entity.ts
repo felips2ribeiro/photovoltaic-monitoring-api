@@ -9,20 +9,22 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 
 @Entity('inverters')
+@Unique(['externalId'])
 export class Inverter {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ comment: 'ID único interno do inversor' })
   id: number;
 
   @Column({
     unique: true,
-    comment: 'ID do inversor físico, ex: 1 a 8 do arquivo JSON',
+    comment: 'ID externo do inversor (ex: 1-8 do arquivo JSON)',
   })
   externalId: number;
 
-  @Column()
+  @Column({ length: 100, comment: 'Nome descritivo do inversor' })
   name: string;
 
   @ManyToOne(() => Plant, (plant) => plant.inverters, {
@@ -32,15 +34,17 @@ export class Inverter {
   @JoinColumn({ name: 'plantId' })
   plant: Plant;
 
-  @Column()
+  @Column({
+    comment: 'Chave estrangeira para a usina à qual o inversor pertence',
+  })
   plantId: number;
 
   @OneToMany(() => Metric, (metric) => metric.inverter)
   metrics: Metric[];
 
-  @CreateDateColumn()
+  @CreateDateColumn({ comment: 'Data de criação do registro' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ comment: 'Data da última atualização do registro' })
   updatedAt: Date;
 }
