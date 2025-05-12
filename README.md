@@ -125,23 +125,28 @@ Principais grupos de endpoints:
 -   **Métricas (`/metrics`):**
     -   `POST /metrics/ingest-file`: Dispara a ingestão dos dados de medição do arquivo `metrics.json`.
 -   **Analytics (`/analytics`):**
-    -   `GET /analytics/inverters/:inverterId/max-power-by-day`: Retorna a potência ativa máxima registrada por dia para um inversor específico, dentro de um intervalo de datas (`data_inicio`, `data_fim` como query params).
+    -   **Potência Máxima por Dia para um Inversor**
+        -   **Endpoint:** `GET /analytics/inverters/:inverterId/max-power-by-day`
+        -   **Descrição:** Retorna a potência ativa máxima registrada para cada dia, para um inversor específico, dentro de um intervalo de datas. Leituras de potência nulas são ignoradas no cálculo.
+        -   **Parâmetro de Rota:** `inverterId` (number).
+        -   **Query Parameters Obrigatórios:** `data_inicio` (string ISO 8601), `data_fim` (string ISO 8601).
+        -   **Resposta de Sucesso (200 OK):** Array de objetos `{ "day": "YYYY-MM-DD", "maxActivePower": number | null }`.
+    -   **Média de Temperatura por Dia para um Inversor**
+        -   **Endpoint:** `GET /analytics/inverters/:inverterId/average-temperature-by-day`
+        -   **Descrição:** Retorna a temperatura média registrada para cada dia, para um inversor específico, dentro de um intervalo de datas. Leituras de temperatura nulas são ignoradas no cálculo da média.
+        -   **Parâmetro de Rota:** `inverterId` (number).
+        -   **Query Parameters Obrigatórios:** `data_inicio` (string ISO 8601), `data_fim` (string ISO 8601).
+        -   **Resposta de Sucesso (200 OK):** Array de objetos `{ "day": "YYYY-MM-DD", "averageTemperature": number | null }`.
     -   *(Outros endpoints de analytics a serem implementados)*
 
 ## Decisões de Design e Justificativas
 
--   **DTOs de Entrada e Resposta:** DTOs (Data Transfer Objects) são utilizados extensivamente para:
-    -   Validar os dados de entrada das requisições (`class-validator`).
-    -   Transformar dados de entrada (`class-transformer`).
-    -   Definir contratos claros para as respostas da API (`XxxResponseDto`), permitindo a omissão seletiva de campos (ex: `updatedAt` de entidades) e o desacoplamento da representação da API das entidades internas. Isso é ativado usando o `ClassSerializerInterceptor` do NestJS.
+-   **DTOs de Entrada e Resposta:** DTOs (Data Transfer Objects) são utilizados extensivamente para validar dados de entrada (`class-validator`), transformar dados (`class-transformer`), e definir contratos claros para as respostas da API (`XxxResponseDto`). O `ClassSerializerInterceptor` do NestJS é usado para controlar a exposição de campos nas respostas.
 -   **Seeding e Ingestão de Dados:**
-    -   **Dados Base (Usinas e Inversores):** São automaticamente "semeados" no banco de dados na inicialização da aplicação (`onModuleInit` no `AppModule`). Isso garante que o ambiente de desenvolvimento e teste esteja pronto rapidamente com a estrutura de dados fundamental, verificando a existência antes de criar para evitar duplicatas.
-    -   **Ingestão de Métricas:** A ingestão dos dados volumosos do `metrics.json` é controlada por um endpoint dedicado (`POST /metrics/ingest-file`). Esta abordagem foi escolhida para:
-        -   Dar controle explícito sobre quando essa operação (potencialmente mais longa) é executada.
-        -   Evitar re-ingestões automáticas e desnecessárias a cada reinício da aplicação no modo de desenvolvimento (watch mode).
-        -   Permitir um feedback claro ao usuário sobre o resultado do processo de ingestão.
+    -   **Dados Base (Usinas e Inversores):** São automaticamente "semeados" no `onModuleInit` do `AppModule` para garantir que o ambiente esteja pronto, com verificação de existência para evitar duplicatas.
+    -   **Ingestão de Métricas:** Controlada por um endpoint dedicado (`POST /metrics/ingest-file`) para dar controle explícito sobre a operação e evitar re-ingestões automáticas. A ingestão é feita em lote (`bulk save`) para melhor performance.
 -   **Tratamento de Dados de Métricas:**
-    -   **`potencia_ativa_watt: null`:** O sistema foi configurado para aceitar `null` como um valor válido para `potencia_ativa_watt` no arquivo `metrics.json`. Esses valores são persistidos como `NULL` no banco de dados, representando momentos em que pode ter ocorrido uma falha na leitura do sensor ou ausência de dados. Isso permite registrar todos os timestamps de medição. Os endpoints de analytics são responsáveis por tratar esses valores nulos apropriadamente (ex: ignorando-os em cálculos de `MAX` ou `AVG`).
-    -   **Estrutura de Data Aninhada (`datetime: { $date: "ISO_STRING" }`):** O DTO de ingestão (`IngestMetricRecordDto`) utiliza `@Transform` do `class-transformer` para converter essa estrutura aninhada em um objeto `Date` padrão do JavaScript antes da validação e persistência.
--   **Validação de Datas em Query Parameters:** Para parâmetros de data como `data_inicio` e `data_fim`, a validação estrita `@IsISO8601()` foi comentada nos DTOs de query para melhor compatibilidade com a forma como o Swagger UI pode enviar os dados. A transformação para objetos `Date` e a validação subsequente com `@IsDate()` são mantidas para garantir que datas válidas sejam processadas pelo backend.
--   **Consultas de Analytics:** Utilizam o QueryBuilder do TypeORM para flexibilidade e para construir queries SQL otimizadas para agregações e agrupamentos. Funções específicas do banco (ex: `strftime` para SQLite) são usadas para manipulação de datas nas queries.
+    -   **Valores Nulos:** Campos como `potencia_ativa_watt` e `temperatura_celsius` no `metrics.json` podem ser `null`. O sistema está configurado para aceitar e persistir esses `null`s, representando ausência de leitura válida. Os cálculos de analytics (MAX, AVG) são configurados para ignorar esses valores nulos.
+    -   **Estrutura de Data Aninhada (`datetime: { $date: "ISO_STRING" }`):** O `IngestMetricRecordDto` utiliza `@Transform` para converter esta estrutura em um objeto `Date` padrão.
+-   **Validação de Datas em Query Parameters:** A validação estrita `@IsISO8601()` foi flexibilizada nos DTOs de query de analytics para melhor compatibilidade com diferentes formas de envio de datas (ex: Swagger UI). A transformação para `Date` e a validação `@IsDate()` garantem que datas válidas sejam processadas.
+-   **Consultas de Analytics:** Utilizam o QueryBuilder do TypeORM. Funções específicas do banco (ex: `strftime` para SQLite) são usadas para manipulação de datas. A lógica comum de consulta para agregações diárias foi refatorada em métodos privados no `AnalyticsService` para evitar duplicação de código (DRY).
