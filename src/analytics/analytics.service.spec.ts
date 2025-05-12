@@ -218,4 +218,110 @@ describe('AnalyticsService', () => {
       expect(result[0].maxActivePower).toBeNull();
     });
   });
+
+  describe('getAverageTemperatureByDay', () => {
+    it('should return daily average temperature for a valid inverter and date range', async () => {
+      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
+      const rawQueryResult = [
+        { day: '2023-01-15', averageTemperature: '25.50' },
+        { day: '2023-01-16', averageTemperature: '28.75' },
+      ];
+      mockQueryBuilder.getRawMany.mockResolvedValue(rawQueryResult);
+
+      const result = await service.getAverageTemperatureByDay(
+        mockInverter.id,
+        startDate,
+        endDate,
+      );
+
+      expect(inverterRepository.findOneBy).toHaveBeenCalledWith({
+        id: mockInverter.id,
+      });
+      expect(metricRepository.createQueryBuilder).toHaveBeenCalledWith(
+        'metric',
+      );
+      expect(mockQueryBuilder.select).toHaveBeenCalledWith(
+        "strftime('%Y-%m-%d', metric.timestamp)",
+        'day',
+      );
+      expect(mockQueryBuilder.addSelect).toHaveBeenCalledWith(
+        'AVG(metric.temperature)',
+        'averageTemperature',
+      );
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+        'metric.inverterId = :inverterId',
+        { inverterId: mockInverter.id },
+      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'metric.timestamp >= :startDate',
+        { startDate },
+      );
+
+      const expectedEndDateString = new Date(endDate);
+      expectedEndDateString.setHours(23, 59, 59, 999);
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'metric.timestamp <= :adjustedEndDate',
+        expect.objectContaining({
+          adjustedEndDate: expectedEndDateString.toISOString(),
+        }),
+      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'metric.temperature IS NOT NULL',
+      );
+      expect(mockQueryBuilder.groupBy).toHaveBeenCalledWith('day');
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('day', 'ASC');
+      expect(mockQueryBuilder.getRawMany).toHaveBeenCalled();
+
+      expect(result).toEqual([
+        { day: '2023-01-15', averageTemperature: 25.5 },
+        { day: '2023-01-16', averageTemperature: 28.75 },
+      ]);
+    });
+
+    it('should throw NotFoundException if inverter is not found', async () => {
+      inverterRepository.findOneBy.mockResolvedValue(null);
+      await expect(
+        service.getAverageTemperatureByDay(999, startDate, endDate),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException if startDate is after endDate', async () => {
+      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
+      const invalidEndDate = new Date('2023-01-14T00:00:00Z');
+      await expect(
+        service.getAverageTemperatureByDay(
+          mockInverter.id,
+          startDate,
+          invalidEndDate,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should return an empty array if no metrics with temperature are found', async () => {
+      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
+      mockQueryBuilder.getRawMany.mockResolvedValue([]);
+
+      const result = await service.getAverageTemperatureByDay(
+        mockInverter.id,
+        startDate,
+        endDate,
+      );
+      expect(result).toEqual([]);
+    });
+
+    it('should return averageTemperature as null if AVG of only NULLs returns null', async () => {
+      inverterRepository.findOneBy.mockResolvedValue(mockInverter as Inverter);
+      const rawQueryResultWithAllNulls = [
+        { day: '2023-01-15', averageTemperature: null },
+      ];
+      mockQueryBuilder.getRawMany.mockResolvedValue(rawQueryResultWithAllNulls);
+
+      const result = await service.getAverageTemperatureByDay(
+        mockInverter.id,
+        startDate,
+        endDate,
+      );
+      expect(result[0].averageTemperature).toBeNull();
+    });
+  });
 });
