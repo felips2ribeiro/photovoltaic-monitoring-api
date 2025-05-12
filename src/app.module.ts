@@ -28,7 +28,6 @@ import { InvertersService } from './inverters/inverters.service';
 export class AppModule implements OnModuleInit {
   private readonly logger = new Logger(AppModule.name);
 
-  // Injetar os serviços necessários para o seeding
   constructor(
     private readonly plantsService: PlantsService,
     private readonly invertersService: InvertersService,
@@ -43,7 +42,6 @@ export class AppModule implements OnModuleInit {
 
   private async seedDatabase() {
     try {
-      // --- Seed Usinas ---
       let plant1 = await this.plantsService.findOneByName('Usina 1');
       if (!plant1) {
         this.logger.log('Seeding Plant 1...');
@@ -60,14 +58,12 @@ export class AppModule implements OnModuleInit {
         this.logger.log('Plant 2 already exists.');
       }
 
-      // --- Seed Inversores ---
       const invertersToSeed = [
-        // Usina 1
         { externalId: 1, name: 'Inversor 1 (U1)', plantId: plant1.id },
         { externalId: 2, name: 'Inversor 2 (U1)', plantId: plant1.id },
         { externalId: 3, name: 'Inversor 3 (U1)', plantId: plant1.id },
         { externalId: 4, name: 'Inversor 4 (U1)', plantId: plant1.id },
-        // Usina 2
+
         { externalId: 5, name: 'Inversor 5 (U2)', plantId: plant2.id },
         { externalId: 6, name: 'Inversor 6 (U2)', plantId: plant2.id },
         { externalId: 7, name: 'Inversor 7 (U2)', plantId: plant2.id },

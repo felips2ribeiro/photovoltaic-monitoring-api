@@ -28,8 +28,8 @@ export class Metric {
   @Column({ type: 'datetime' })
   timestamp: Date;
 
-  @Column({ type: 'float' })
-  activePower: number;
+  @Column({ type: 'float', nullable: true })
+  activePower: number | null;
 
   @Column({ type: 'float', nullable: true })
   temperature?: number | null;

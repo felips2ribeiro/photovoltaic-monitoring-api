@@ -66,10 +66,22 @@ export class IngestMetricRecordDto {
   @IsNotEmpty({ message: 'inversor_id should not be empty' })
   inversor_id: number;
 
-  @ApiProperty({ description: 'Active power in Watts (W)', example: 5000.0 })
-  @IsNumber({}, { message: 'potencia_ativa_watt must be a number' })
-  @IsNotEmpty({ message: 'potencia_ativa_watt should not be empty' })
-  potencia_ativa_watt: number;
+  @ApiPropertyOptional({
+    description:
+      'Active power in Watts (W). Can be null if reading is unavailable.',
+    example: 5000.0,
+    type: 'number',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber(
+    { allowNaN: false, allowInfinity: false },
+    {
+      message:
+        'potencia_ativa_watt, if provided and not null, must be a valid number.',
+    },
+  )
+  potencia_ativa_watt: number | null;
 
   @ApiPropertyOptional({
     description: 'Temperature in Celsius (°C)',
