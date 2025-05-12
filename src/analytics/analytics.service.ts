@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Metric } from '../metrics/entities/metric.entity';
 import { Between, IsNull, Not, Repository } from 'typeorm';
 import { Inverter } from '../inverters/entities/inverter.entity';
+import { Plant } from '../plants/entities/plant.entity';
 import { DailyMaxPowerEntryDto } from './dto/daily-max-power-response.dto';
 import { DailyAverageTemperatureEntryDto } from './dto/daily-average-temperature-response.dto';
 import { EnergyGenerationResponseDto } from './dto/energy-generation-response.dto';
@@ -15,6 +16,7 @@ import {
   calculateTotalEnergyGenerationWh,
   EntityWithPower,
 } from '../common/utils/energy-calculation.util';
+
 interface AggregatedDailyValue {
   day: string;
   value: number | string | null;
@@ -29,6 +31,8 @@ export class AnalyticsService {
     private readonly metricRepository: Repository<Metric>,
     @InjectRepository(Inverter)
     private readonly inverterRepository: Repository<Inverter>,
+    @InjectRepository(Plant)
+    private readonly plantRepository: Repository<Plant>,
   ) {}
 
   private async validateInverterAndDateRange(
@@ -208,6 +212,65 @@ export class AnalyticsService {
       endDate,
       entityId: inverterId,
       entityType: 'inverter',
+    });
+  }
+
+  async getPlantEnergyGeneration(
+    plantId: number,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<EnergyGenerationResponseDto> {
+    const plant = await this.plantRepository.findOne({
+      where: { id: plantId },
+      relations: { inverters: true },
+    });
+
+    if (!plant) {
+      throw new NotFoundException(`Plant with ID "${plantId}" not found.`);
+    }
+
+    if (startDate > endDate) {
+      throw new BadRequestException(
+        'End date must be after or the same as start date.',
+      );
+    }
+
+    let totalPlantGenerationWh = 0;
+
+    if (!plant.inverters || plant.inverters.length === 0) {
+      this.logger.log(
+        `Plant with ID "${plantId}" has no inverters. Total generation is 0.`,
+      );
+      return new EnergyGenerationResponseDto({
+        totalGenerationWh: 0,
+        startDate,
+        endDate,
+        entityId: plantId,
+        entityType: 'plant',
+      });
+    }
+
+    this.logger.debug(
+      `Calculating generation for plant ${plantId} with ${plant.inverters.length} inverters.`,
+    );
+
+    const inverterGenerationPromises = plant.inverters.map(
+      (inverter: Inverter) =>
+        this.getInverterEnergyGeneration(inverter.id, startDate, endDate),
+    );
+
+    const inverterGenerations = await Promise.all(inverterGenerationPromises);
+
+    for (const generationResult of inverterGenerations) {
+      totalPlantGenerationWh += generationResult.totalGenerationWh;
+    }
+
+    return new EnergyGenerationResponseDto({
+      totalGenerationWh: parseFloat(totalPlantGenerationWh.toFixed(3)),
+      startDate,
+      endDate,
+      entityId: plantId,
+      entityType: 'plant',
     });
   }
 }

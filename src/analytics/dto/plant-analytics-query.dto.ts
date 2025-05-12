@@ -1,22 +1,37 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, Min, IsInt } from 'class-validator';
-import { Transform } from 'class-transformer';
-import { DateRangeQueryDto } from './date-range-query.dto';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsDate } from 'class-validator';
+import { Transform, TransformFnParams } from 'class-transformer';
 
-export class PlantAnalyticsQueryDto extends DateRangeQueryDto {
-  @ApiPropertyOptional({
-    description: 'ID of the power plant',
-    example: 1,
+export class PlantAnalyticsQueryDto {
+  @ApiProperty({
+    description: 'Start date (ISO 8601 string)',
+    example: '2023-01-01T00:00:00Z',
+    type: String,
   })
-  @IsOptional()
-  @Transform(({ value }: { value: string }) =>
-    value && !isNaN(parseInt(value, 10)) ? parseInt(value, 10) : undefined,
-  )
-  @IsNumber(
-    { allowNaN: false, allowInfinity: false },
-    { message: 'usina_id must be a valid number' },
-  )
-  @IsInt({ message: 'usina_id must be an integer' })
-  @Min(1, { message: 'usina_id must be at least 1' })
-  usina_id?: number;
+  @IsNotEmpty({ message: 'data_inicio is required.' })
+  @Transform(({ value }: TransformFnParams): Date | undefined => {
+    if (typeof value === 'string' && value.trim() !== '') {
+      const date = new Date(value);
+      return isNaN(date.getTime()) ? undefined : date;
+    }
+    return value;
+  })
+  @IsDate({ message: 'data_inicio must resolve to a valid Date object.' })
+  data_inicio: Date;
+
+  @ApiProperty({
+    description: 'End date (ISO 8601 string)',
+    example: '2023-01-31T23:59:59Z',
+    type: String,
+  })
+  @IsNotEmpty({ message: 'data_fim is required.' })
+  @Transform(({ value }: TransformFnParams): Date | undefined => {
+    if (typeof value === 'string' && value.trim() !== '') {
+      const date = new Date(value);
+      return isNaN(date.getTime()) ? undefined : date;
+    }
+    return value;
+  })
+  @IsDate({ message: 'data_fim must resolve to a valid Date object.' })
+  data_fim: Date;
 }

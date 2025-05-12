@@ -15,6 +15,7 @@ import { InverterAnalyticsQueryDto } from './dto/inverter-analytics-query.dto';
 import { DailyMaxPowerResponseDto } from './dto/daily-max-power-response.dto';
 import { DailyAverageTemperatureResponseDto } from './dto/daily-average-temperature-response.dto';
 import { EnergyGenerationResponseDto } from './dto/energy-generation-response.dto';
+import { PlantAnalyticsQueryDto } from './dto/plant-analytics-query.dto';
 
 @ApiTags('analytics')
 @Controller('analytics')
@@ -154,6 +155,46 @@ export class AnalyticsController {
 
     return this.analyticsService.getInverterEnergyGeneration(
       inverterId,
+      query.data_inicio,
+      query.data_fim,
+    );
+  }
+
+  @Get('plants/:plantId/generation')
+  @ApiOperation({
+    summary:
+      'Calculate total energy generation for a specific plant within a date range.',
+  })
+  @ApiParam({
+    name: 'plantId',
+    type: Number,
+    required: true,
+    description: 'Internal ID of the plant.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully calculated energy generation for the plant.',
+    type: EnergyGenerationResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid parameters.' })
+  @ApiResponse({ status: 404, description: 'Plant not found.' })
+  async getPlantEnergyGeneration(
+    @Param('plantId', ParseIntPipe) plantId: number,
+    @Query(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        forbidUnknownValues: true,
+      }),
+    )
+    query: PlantAnalyticsQueryDto,
+  ): Promise<EnergyGenerationResponseDto> {
+    this.logger.debug(
+      `getPlantEnergyGeneration called for plantId: ${plantId}, query: ${JSON.stringify(query)}`,
+    );
+    return this.analyticsService.getPlantEnergyGeneration(
+      plantId,
       query.data_inicio,
       query.data_fim,
     );
